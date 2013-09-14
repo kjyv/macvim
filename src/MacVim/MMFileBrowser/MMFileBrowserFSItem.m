@@ -4,17 +4,18 @@
 
 @class MMFileBrowserFSItemIconCache;
 
+
 @interface MMFileBrowserFSItem () {
-  char *cpath;
-  MMFileBrowserFSItem *parent;
-  MMVimController *vim;
-  BOOL includesHiddenFiles;
-  BOOL ignoreNextReload;
-  NSImage *icon;
-  MMFileBrowserFSItemIconCache *iconCache;
+    @public
+    char *cpath;
+    MMFileBrowserFSItem *parent;
+    MMVimController *vim;
+    BOOL includesHiddenFiles;
+    BOOL ignoreNextReload;
+    NSImage *icon;
+    MMFileBrowserFSItemIconCache *iconCache;
 }
 
-@property (readonly) const char *cpath;
 
 - (id)initWithPath:(char *)thePath
             parent:(MMFileBrowserFSItem *)parentItem
@@ -24,8 +25,6 @@
 - (MMFileBrowserFSItem *)_itemAtPath:(NSArray *)components;
 
 @end
-
-
 
 @interface MMFileBrowserFSItemStack : NSObject
 
@@ -129,7 +128,7 @@
 {
   if (checkChildrenForExistingItem) {
     for (MMFileBrowserFSItem *c in currentChildren) {
-      if (strcmp(c.cpath, filename) == 0) {
+      if (strcmp(c->cpath, filename) == 0) {
         if (removeFromCurrentChildren) [removeFromCurrentChildren removeObject:c];
         return c;
       }

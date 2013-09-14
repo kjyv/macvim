@@ -23,7 +23,7 @@
 - (void)makeFirstResponder:(id)sender;
 - (void)selectInBrowser;
 - (void)selectInBrowserByExpandingItems;
-
+- (void)changeWorkingDirectory:(NSString *)path;
 - (NSMenu *)menuForRow:(NSInteger)row;
 
 @end

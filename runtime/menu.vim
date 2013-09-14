@@ -945,6 +945,7 @@ cnoremenu <script> <silent> 1.100 PopUp.Select\ &All	<C-U>call <SID>SelectAll()<
 
 an 1.100 PopUp.-SEP3-			<Nop>
 nnoremenu <script> <silent> 1.110 PopUp.Reveal\ in\ File\ Browser	:<C-U>macaction revealInFileBrowser:<CR>
+nnoremenu <script> <silent> 1.120 PopUp.Change\ File\ Browser\ To\ Dir	:<C-U>macaction setParentDirectoryAsCWD:<CR>
 
 if has("spell")
   " Spell suggestions in the popup menu.  Note that this will slow down the

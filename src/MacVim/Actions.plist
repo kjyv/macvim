@@ -68,6 +68,8 @@
 	<string></string>
 	<key>showVimHelp:</key>
 	<string></string>
+	<key>setParentDirectoryAsCWD:</key>
+	<string></string>
 	<key>terminate:</key>
 	<string></string>
 	<key>toggleFileBrowser:</key>

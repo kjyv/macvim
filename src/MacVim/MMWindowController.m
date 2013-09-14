@@ -956,6 +956,7 @@
 - (void)invFullScreen:(id)sender
 {
     [vimController addVimInput:@"<C-\\><C-N>:set invfu<CR>"];
+    
 }
 
 - (void)setBufferModified:(BOOL)mod
@@ -1453,6 +1454,12 @@
 - (IBAction)revealInFileBrowser:(id)sender
 {
     [fileBrowserController selectInBrowserByExpandingItems];
+}
+
+- (IBAction)setParentDirectoryAsCWD:(id)sender
+{
+    NSString* path = [decoratedWindow representedFilename];
+    [fileBrowserController changeWorkingDirectory:path];
 }
 
 - (IBAction)sidebarEdgePreferenceChanged:(id)sender

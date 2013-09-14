@@ -120,6 +120,7 @@
 - (IBAction)toggleFileBrowser:(id)sender;
 - (IBAction)selectInFileBrowser:(id)sender;
 - (IBAction)revealInFileBrowser:(id)sender;
+- (IBAction)setParentDirectoryAsCWD:(id)sender;
 - (IBAction)sidebarEdgePreferenceChanged:(id)sender;
 
 @end
