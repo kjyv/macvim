@@ -54,7 +54,10 @@
   }
   return self;
 }
-
+- (void)reloadTheme{
+  [fileBrowser display];
+  [pathControl display];
+}
 - (void)loadView {
   fileBrowser = [[MMFileBrowser alloc] initWithFrame:NSZeroRect];
   [fileBrowser setFocusRingType:NSFocusRingTypeNone];
