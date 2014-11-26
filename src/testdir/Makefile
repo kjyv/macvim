@@ -40,7 +40,6 @@ SCRIPTS = test1.out test2.out test3.out test4.out test5.out test6.out \
 		test_qf_title.out \
 		test_eval.out \
 		test_options.out
->>>>>>> upstream/master
 
 SCRIPTS_GUI = test16.out
 
