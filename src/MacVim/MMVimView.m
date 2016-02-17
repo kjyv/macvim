@@ -57,7 +57,7 @@ enum {
 - (MMScroller *)scrollbarForIdentifier:(int32_t)ident index:(unsigned *)idx;
 - (NSSize)vimViewSizeForTextViewSize:(NSSize)textViewSize;
 - (NSRect)textViewRectForVimViewSize:(NSSize)contentSize;
-- (void)frameSizeMayHaveChanged;
+//- (void)frameSizeMayHaveChanged;
 - (void)textViewFrameDidChange:(NSNotification *)notification;
 @end
 
@@ -333,7 +333,6 @@ enum {
     [super viewDidEndLiveResize];
 }
 
-#if 0
 - (void)setFrameSize:(NSSize)size
 {
     // NOTE: Instead of only acting when a frame was resized, we do some
@@ -342,16 +341,15 @@ enum {
     // row will result in the vim view holding more rows than the can fit
     // inside the window.)
     [super setFrameSize:size];
-    [self frameSizeMayHaveChanged];
+//    [self frameSizeMayHaveChanged];
 }
 
 - (void)setFrame:(NSRect)frame
 {
     // See comment in setFrameSize: above.
     [super setFrame:frame];
-    [self frameSizeMayHaveChanged];
+//    [self frameSizeMayHaveChanged];
 }
-#endif
 
 - (void)placeViews
 {
@@ -669,6 +667,7 @@ enum {
     return rect;
 }
 
+#if 0
 - (void)frameSizeMayHaveChanged
 {
     // NOTE: Whenever a call is made that may have changed the frame size we
@@ -721,6 +720,7 @@ enum {
         }
     }
 }
+#endif
 
 - (void)textViewFrameDidChange:(NSNotification *)notification
 {

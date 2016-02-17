@@ -225,7 +225,7 @@
     [vimView setAutoresizingMask:NSViewWidthSizable|NSViewHeightSizable];
 
     // Avoid Vim view sending dimension change messages during startup.
-    //[vimView disableTextViewDimensionMessages:YES];
+    [vimView disableTextViewDimensionMessages:YES];
 
     splitView = [[NSSplitView alloc] initWithFrame:frame];
     [splitView setVertical:YES];
@@ -408,7 +408,6 @@
     // get focus when a window is closed.
     [decoratedWindow orderOut:self];
     [decoratedWindow setViewsNeedDisplay:NO];
-    [[self window] orderOut:self];
 }
 
 - (void)openWindow
@@ -476,6 +475,9 @@
 - (void)setTextDimensionsWithRows:(int)rows columns:(int)cols isLive:(BOOL)live
                      keepOnScreen:(BOOL)onScreen
 {
+    int maxRows, maxCols;
+    [[vimView textView] getMaxRows:&maxRows columns:&maxCols];
+
     ASLogDebug(@"setTextDimensionsWithRows:%d columns:%d isLive:%d "
             "keepOnScreen:%d", rows, cols, live, onScreen);
 
@@ -490,12 +492,25 @@
     // size when this flag is set, otherwise the window might jitter when the
     // user drags to resize the window.
 
+    if (maxRows == rows && maxCols == cols)
+        return;
+    
     [vimView setDesiredRows:rows columns:cols];
 
     if (setupDone && !live) {
         shouldResizeVimView = YES;
-        //shouldResizeWindow = onScreen && !fullScreenWindow;
-        keepOnScreen = onScreen;
+        shouldResizeWindow = onScreen && !fullScreenWindow;
+    }
+
+    // Autosave rows and columns.
+    if (windowAutosaveKey && !fullScreenEnabled && [tabBarControl isHidden]
+            && rows > MMMinRows && cols > MMMinColumns) {
+        // NOTE: Don't save if tabline is visible.  Otherwise new windows will
+        // look like they are missing a line or two (depending on font size).
+        NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
+        [ud setInteger:rows forKey:MMAutosaveRowsKey];
+        [ud setInteger:cols forKey:MMAutosaveColumnsKey];
+        [ud synchronize];
     }
 
     // Autosave rows and columns.
@@ -520,6 +535,8 @@
         [ud setInteger:cols forKey:MMAutosaveColumnsKey];
         [ud synchronize];
     }
+    //shouldResizeVimView = YES;
+    //keepOnScreen = onScreen;
 }
 
 - (void)moveWindowAcrossScreens:(NSPoint)topLeft
@@ -739,7 +756,7 @@
 
         [vimView placeViews];
         shouldResizeVimView = NO;
-        keepOnScreen = NO;
+        //keepOnScreen = NO;
     }
 
     // NOTE! Actual drawing must take place after window has been resized etc.,
@@ -1332,15 +1349,11 @@
         // NOTE: This method is called when the user drags the window, but not
         // when the top left point changes programmatically.
         // NOTE 2: Vim counts Y-coordinates from the top of the screen.
-        
-        //TODO kjyv: why is this done? causes problems with sidebar code, seems ok in macvim-dev master
-        /*
         int pos[2] = {
                 (int)topLeft.x,
                 (int)(NSMaxY([[decoratedWindow screen] frame]) - topLeft.y) };
         NSData *data = [NSData dataWithBytes:pos length:2*sizeof(int)];
         [vimController sendMessage:SetWindowPositionMsgID data:data];
-        */
     }
 }
 
@@ -1365,6 +1378,7 @@
     return newFrame;
 }
 
+/*
 - (void)windowDidResize:(id)sender
 {
     if (resizingDueToMove) {
@@ -1387,6 +1401,7 @@
     // (rows,columns) changed.
     [vimView setFrameSize:[self contentSize]];
 }
+*/
 
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification
 {

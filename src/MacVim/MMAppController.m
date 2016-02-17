@@ -783,7 +783,9 @@ fsEventCallback(ConstFSEventStreamRef streamRef,
             if (NSMaxX(winFrame) > NSMaxX(screenFrame))
                 topLeft.x = NSMinX(screenFrame);
             if (NSMinY(winFrame) < NSMinY(screenFrame))
-                topLeft.y = NSMaxY(screenFrame);
+                //topLeft.y = NSMaxY(screenFrame);  //wrong for sidebar code!
+                topLeft.y = NSMaxY([screen visibleFrame]);
+
         } else {
             ASLogNotice(@"Window not on screen, don't constrain position");
         }
