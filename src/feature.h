@@ -54,19 +54,25 @@
 #endif
 
 /*
- * These executables are made available with the +big feature, because they
- * are supposed to have enough RAM: Win32 (console & GUI), dos32, OS/2 and VMS.
+ * For Unix, Mac and Win32 use +huge by default.  These days CPUs are fast and
+ * Memory is cheap.
+ * Use +big for older systems: Other MS-Windows, dos32, OS/2 and VMS.
  * The dos16 version has very little RAM available, use +small.
+ * Otherwise use +normal
  */
 #if !defined(FEAT_TINY) && !defined(FEAT_SMALL) && !defined(FEAT_NORMAL) \
 	&& !defined(FEAT_BIG) && !defined(FEAT_HUGE)
-# if defined(MSWIN) || defined(DJGPP) || defined(OS2) || defined(VMS) || defined(MACOS) || defined(AMIGA)
-#  define FEAT_BIG
+# if defined(UNIX) || defined(WIN3264) || defined(MACOS)
+#  define FEAT_HUGE
 # else
-#  ifdef MSDOS
-#   define FEAT_SMALL
+#  if defined(MSWIN) || defined(DJGPP) || defined(VMS) || defined(MACOS) || defined(AMIGA)
+#   define FEAT_BIG
 #  else
-#   define FEAT_NORMAL
+#   ifdef MSDOS
+#    define FEAT_SMALL
+#   else
+#    define FEAT_NORMAL
+#   endif
 #  endif
 # endif
 #endif
@@ -248,13 +254,6 @@
 #endif
 
 /*
- * +ex_extra		":retab", ":right", ":left", ":center", ":normal".
- */
-#ifdef FEAT_NORMAL
-# define FEAT_EX_EXTRA
-#endif
-
-/*
  * +extra_search	'hlsearch' and 'incsearch' options.
  */
 #ifdef FEAT_NORMAL
@@ -382,13 +381,6 @@
 # if defined(HAVE_FLOAT_FUNCS) || defined(WIN3264) || defined(MACOS)
 #  define FEAT_FLOAT
 # endif
-#endif
-
-/*
- * +python and +python3 require FEAT_EVAL.
- */
-#if !defined(FEAT_EVAL) && (defined(FEAT_PYTHON3) || defined(FEAT_PYTHON))
-# define FEAT_EVAL
 #endif
 
 /*
@@ -688,9 +680,6 @@
 # define ESC_CHG_TO_ENG_MODE		/* if defined, when ESC pressed,
 					 * turn to english mode
 					 */
-# if !defined(FEAT_XFONTSET) && defined(HAVE_X11) && !defined(FEAT_GUI_GTK)
-#  define FEAT_XFONTSET			/* Hangul input requires xfontset */
-# endif
 # if defined(FEAT_XIM) && !defined(LINT)
 	Error: You should select only ONE of XIM and HANGUL INPUT
 # endif
@@ -698,7 +687,6 @@
 #if defined(FEAT_HANGULIN) || defined(FEAT_XIM)
 /* # define X_LOCALE */			/* for OS with incomplete locale
 					   support, like old linux versions. */
-/* # define SLOW_XSERVER */		/* for extremely slow X server */
 #endif
 
 /*
@@ -1065,7 +1053,7 @@
  * +mouse		Any mouse support (any of the above enabled).
  */
 /* OS/2 and Amiga console have no mouse support */
-#if !defined(AMIGA) && !defined(OS2)
+#if !defined(AMIGA)
 # ifdef FEAT_NORMAL
 #  define FEAT_MOUSE_XTERM
 # endif
@@ -1256,6 +1244,7 @@
  * +sniff		Sniff interface: "--enable-sniff"
  * +sun_workshop	Sun Workshop integration
  * +netbeans_intg	Netbeans integration
+ * +channel		Inter process communication
  */
 
 /*
@@ -1277,6 +1266,20 @@
 #if (!defined(FEAT_LISTCMDS) || !defined(FEAT_EVAL)) \
 	&& defined(FEAT_NETBEANS_INTG)
 # undef FEAT_NETBEANS_INTG
+#endif
+
+/*
+ * The +channel feature requires +eval.
+ */
+#if !defined(FEAT_EVAL) && defined(FEAT_CHANNEL)
+# undef FEAT_CHANNEL
+#endif
+
+/*
+ * The +job feature requires +eval and Unix or MS-Windows.
+ */
+#if (defined(UNIX) || defined(WIN32)) && defined(FEAT_EVAL)
+# define FEAT_JOB
 #endif
 
 /*

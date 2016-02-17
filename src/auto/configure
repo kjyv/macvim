@@ -637,6 +637,9 @@ GUI_LIB_LOC
 GUI_INC_LOC
 NARROW_PROTO
 MOTIF_LIBNAME
+GRESOURCE_OBJ
+GRESOURCE_SRC
+GLIB_COMPILE_RESOURCES
 GNOME_INCLUDEDIR
 GNOME_LIBDIR
 GNOME_LIBS
@@ -653,6 +656,8 @@ XMKMF
 xmkmfpath
 SNIFF_OBJ
 SNIFF_SRC
+CHANNEL_OBJ
+CHANNEL_SRC
 NETBEANS_OBJ
 NETBEANS_SRC
 WORKSHOP_OBJ
@@ -689,6 +694,7 @@ PERL_OBJ
 PERL_SRC
 shrpenv
 vi_cv_perlsitelib
+vi_cv_perl_xsubpp
 vi_cv_perllib
 vi_cv_path_perl
 MZSCHEME_MZC
@@ -801,6 +807,7 @@ enable_pythoninterp
 with_python_config_dir
 enable_python3interp
 with_python3_config_dir
+with_properly_linked_python2_python3
 enable_tclinterp
 with_tclsh
 enable_rubyinterp
@@ -808,6 +815,7 @@ with_ruby_command
 enable_cscope
 enable_workshop
 enable_netbeans
+enable_channel
 enable_sniff
 enable_multibyte
 enable_hangulinput
@@ -1468,11 +1476,12 @@ Optional Features:
   --enable-perlinterp=OPTS     Include Perl interpreter.  default=no OPTS=no/yes/dynamic
   --enable-pythoninterp=OPTS   Include Python interpreter. default=no OPTS=no/yes/dynamic
   --enable-python3interp=OPTS   Include Python3 interpreter. default=no OPTS=no/yes/dynamic
-  --enable-tclinterp      Include Tcl interpreter.
+  --enable-tclinterp=OPTS      Include Tcl interpreter. default=no OPTS=no/yes/dynamic
   --enable-rubyinterp=OPTS     Include Ruby interpreter.  default=no OPTS=no/yes/dynamic
   --enable-cscope         Include cscope interface.
   --enable-workshop       Include Sun Visual Workshop support.
   --disable-netbeans      Disable NetBeans integration support.
+  --disable-channel      Disable process communication support.
   --enable-sniff          Include Sniff interface.
   --enable-multibyte      Include multibyte editing support.
   --enable-hangulinput    Include Hangul input support.
@@ -1513,6 +1522,7 @@ Optional Packages:
   --with-plthome=PLTHOME   Use PLTHOME.
   --with-python-config-dir=PATH  Python's config directory
   --with-python3-config-dir=PATH  Python's config directory
+  --with-properly-linked-python2-python3 Link with properly linked Python 2 and Python 3.
   --with-tclsh=PATH       which tclsh to use (default: tclsh8.0)
   --with-ruby-command=RUBY  name of the Ruby command (default: ruby)
   --with-x                use the X Window System
@@ -4192,7 +4202,7 @@ if test "${with_developer_dir+set}" = set; then :
   withval=$with_developer_dir; DEVELOPER_DIR="$withval"; { $as_echo "$as_me:${as_lineno-$LINENO}: result: $DEVELOPER_DIR" >&5
 $as_echo "$DEVELOPER_DIR" >&6; }
 else
-  DEVELOPER_DIR=""; { $as_echo "$as_me:${as_lineno-$LINENO}: result: not present" >&5
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: not present" >&5
 $as_echo "not present" >&6; }
 fi
 
@@ -4298,6 +4308,11 @@ $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
+  else
+    if test -z "$MACOSX_DEPLOYMENT_TARGET"; then
+      macosx_deployment_target=`/usr/bin/sw_vers -productVersion|/usr/bin/sed -e 's/^\([0-9]*\.[0-9]*\).*/\1/'`
+      XCODEFLAGS="$XCODEFLAGS MACOSX_DEPLOYMENT_TARGET=$macosx_deployment_target"
+    fi
   fi
 
 
@@ -4799,8 +4814,8 @@ if test "${with_features+set}" = set; then :
   withval=$with_features; features="$withval"; { $as_echo "$as_me:${as_lineno-$LINENO}: result: $features" >&5
 $as_echo "$features" >&6; }
 else
-  features="normal"; { $as_echo "$as_me:${as_lineno-$LINENO}: result: Defaulting to normal" >&5
-$as_echo "Defaulting to normal" >&6; }
+  features="huge"; { $as_echo "$as_me:${as_lineno-$LINENO}: result: Defaulting to huge" >&5
+$as_echo "Defaulting to huge" >&6; }
 fi
 
 
@@ -4890,6 +4905,10 @@ fi
 $as_echo "$enable_luainterp" >&6; }
 
 if test "$enable_luainterp" = "yes" -o "$enable_luainterp" = "dynamic"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    as_fn_error $? "cannot use Lua with tiny or small features" "$LINENO" 5
+  fi
+
 
 
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking --with-lua-prefix argument" >&5
@@ -5057,7 +5076,7 @@ $as_echo "$vi_cv_version_plain_lua" >&6; }
     if test "x$vi_cv_with_luajit" != "xno" && test "X$vi_cv_version_luajit" != "X"; then
       { $as_echo "$as_me:${as_lineno-$LINENO}: checking if lua.h can be found in $vi_cv_path_lua_pfx/include/luajit-$vi_cv_version_luajit" >&5
 $as_echo_n "checking if lua.h can be found in $vi_cv_path_lua_pfx/include/luajit-$vi_cv_version_luajit... " >&6; }
-      if test -f $vi_cv_path_lua_pfx/include/luajit-$vi_cv_version_luajit/lua.h; then
+      if test -f "$vi_cv_path_lua_pfx/include/luajit-$vi_cv_version_luajit/lua.h"; then
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 	LUA_INC=/luajit-$vi_cv_version_luajit
@@ -5066,7 +5085,7 @@ $as_echo "yes" >&6; }
     if test "X$LUA_INC" = "X"; then
       { $as_echo "$as_me:${as_lineno-$LINENO}: checking if lua.h can be found in $vi_cv_path_lua_pfx/include" >&5
 $as_echo_n "checking if lua.h can be found in $vi_cv_path_lua_pfx/include... " >&6; }
-      if test -f $vi_cv_path_lua_pfx/include/lua.h; then
+      if test -f "$vi_cv_path_lua_pfx/include/lua.h"; then
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
       else
@@ -5074,7 +5093,7 @@ $as_echo "yes" >&6; }
 $as_echo "no" >&6; }
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if lua.h can be found in $vi_cv_path_lua_pfx/include/lua$vi_cv_version_lua" >&5
 $as_echo_n "checking if lua.h can be found in $vi_cv_path_lua_pfx/include/lua$vi_cv_version_lua... " >&6; }
-	if test -f $vi_cv_path_lua_pfx/include/lua$vi_cv_version_lua/lua.h; then
+	if test -f "$vi_cv_path_lua_pfx/include/lua$vi_cv_version_lua/lua.h"; then
 	  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
 	  LUA_INC=/lua$vi_cv_version_lua
@@ -5243,6 +5262,7 @@ fi
 
   if test "X$with_plthome" != "X"; then
        vi_cv_path_mzscheme_pfx="$with_plthome"
+       vi_cv_path_mzscheme="${vi_cv_path_mzscheme_pfx}/bin/mzscheme"
   else
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking PLTHOME environment var" >&5
 $as_echo_n "checking PLTHOME environment var... " >&6; }
@@ -5250,6 +5270,7 @@ $as_echo_n "checking PLTHOME environment var... " >&6; }
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: \"$PLTHOME\"" >&5
 $as_echo "\"$PLTHOME\"" >&6; }
 	vi_cv_path_mzscheme_pfx="$PLTHOME"
+	vi_cv_path_mzscheme="${vi_cv_path_mzscheme_pfx}/bin/mzscheme"
     else
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: not set" >&5
 $as_echo "not set" >&6; }
@@ -5321,54 +5342,63 @@ $as_echo "$vi_cv_path_mzscheme_pfx" >&6; }
     fi
   fi
 
-  SCHEME_INC=
   if test "X$vi_cv_path_mzscheme_pfx" != "X"; then
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include" >&5
-$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include... " >&6; }
-    if test -f $vi_cv_path_mzscheme_pfx/include/scheme.h; then
-      SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include
-      { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for racket include directory" >&5
+$as_echo_n "checking for racket include directory... " >&6; }
+    SCHEME_INC=`${vi_cv_path_mzscheme} -e '(require setup/dirs)(let ((p (find-include-dir))) (when (path? p) (display p)))'`
+    if test "X$SCHEME_INC" != "X"; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${SCHEME_INC}" >&5
+$as_echo "${SCHEME_INC}" >&6; }
     else
-      { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }
-      { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/plt" >&5
-$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/plt... " >&6; }
-      if test -f $vi_cv_path_mzscheme_pfx/include/plt/scheme.h; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include" >&5
+$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include... " >&6; }
+      if test -f "$vi_cv_path_mzscheme_pfx/include/scheme.h"; then
+	SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-	SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include/plt
       else
 	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/racket" >&5
-$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/racket... " >&6; }
-	if test -f $vi_cv_path_mzscheme_pfx/include/racket/scheme.h; then
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/plt" >&5
+$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/plt... " >&6; }
+	if test -f "$vi_cv_path_mzscheme_pfx/include/plt/scheme.h"; then
 	  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-	  SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include/racket
+	  SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include/plt
 	else
 	  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-	  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in /usr/include/plt/" >&5
-$as_echo_n "checking if scheme.h can be found in /usr/include/plt/... " >&6; }
-	  if test -f /usr/include/plt/scheme.h; then
+	  { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/racket" >&5
+$as_echo_n "checking if scheme.h can be found in $vi_cv_path_mzscheme_pfx/include/racket... " >&6; }
+	  if test -f "$vi_cv_path_mzscheme_pfx/include/racket/scheme.h"; then
 	    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-	    SCHEME_INC=/usr/include/plt
+	    SCHEME_INC=${vi_cv_path_mzscheme_pfx}/include/racket
 	  else
 	    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-	    { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in /usr/include/racket/" >&5
-$as_echo_n "checking if scheme.h can be found in /usr/include/racket/... " >&6; }
-	    if test -f /usr/include/racket/scheme.h; then
+	    { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in /usr/include/plt/" >&5
+$as_echo_n "checking if scheme.h can be found in /usr/include/plt/... " >&6; }
+	    if test -f /usr/include/plt/scheme.h; then
 	      { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-	      SCHEME_INC=/usr/include/racket
+	      SCHEME_INC=/usr/include/plt
 	    else
 	      { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-	      vi_cv_path_mzscheme_pfx=
+	      { $as_echo "$as_me:${as_lineno-$LINENO}: checking if scheme.h can be found in /usr/include/racket/" >&5
+$as_echo_n "checking if scheme.h can be found in /usr/include/racket/... " >&6; }
+	      if test -f /usr/include/racket/scheme.h; then
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+		SCHEME_INC=/usr/include/racket
+	      else
+		{ $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+		vi_cv_path_mzscheme_pfx=
+	      fi
 	    fi
 	  fi
 	fi
@@ -5377,52 +5407,101 @@ $as_echo "no" >&6; }
   fi
 
   if test "X$vi_cv_path_mzscheme_pfx" != "X"; then
-    if test "x$MACOSX" = "xyes"; then
-      MZSCHEME_LIBS="-framework Racket"
-      MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
-    elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libmzscheme3m.a"; then
-      MZSCHEME_LIBS="${vi_cv_path_mzscheme_pfx}/lib/libmzscheme3m.a"
-      MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
-    elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libracket3m.a"; then
-      MZSCHEME_LIBS="${vi_cv_path_mzscheme_pfx}/lib/libracket3m.a"
-      MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
-    elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libracket.a"; then
-      MZSCHEME_LIBS="${vi_cv_path_mzscheme_pfx}/lib/libracket.a ${vi_cv_path_mzscheme_pfx}/lib/libmzgc.a"
-    elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libmzscheme.a"; then
-      MZSCHEME_LIBS="${vi_cv_path_mzscheme_pfx}/lib/libmzscheme.a ${vi_cv_path_mzscheme_pfx}/lib/libmzgc.a"
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for racket lib directory" >&5
+$as_echo_n "checking for racket lib directory... " >&6; }
+    SCHEME_LIB=`${vi_cv_path_mzscheme} -e '(require setup/dirs)(let ((p (find-lib-dir))) (when (path? p) (display p)))'`
+    if test "X$SCHEME_LIB" != "X"; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${SCHEME_LIB}" >&5
+$as_echo "${SCHEME_LIB}" >&6; }
     else
-            if test -f "${vi_cv_path_mzscheme_pfx}/lib/libmzscheme3m.so"; then
-        MZSCHEME_LIBS="-L${vi_cv_path_mzscheme_pfx}/lib -lmzscheme3m"
-	MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
-      elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libracket3m.so"; then
-        MZSCHEME_LIBS="-L${vi_cv_path_mzscheme_pfx}/lib -lracket3m"
-	MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
-      elif test -f "${vi_cv_path_mzscheme_pfx}/lib/libracket.so"; then
-        MZSCHEME_LIBS="-L${vi_cv_path_mzscheme_pfx}/lib -lracket -lmzgc"
-      else
-        MZSCHEME_LIBS="-L${vi_cv_path_mzscheme_pfx}/lib -lmzscheme -lmzgc"
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
+    fi
+
+    for path in "${vi_cv_path_mzscheme_pfx}/lib" "${SCHEME_LIB}"; do
+      if test "X$path" != "X"; then
+	if test "x$MACOSX" = "xyes"; then
+	  MZSCHEME_LIBS="-framework Racket"
+	  MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
+	elif test -f "${path}/libmzscheme3m.a"; then
+	  MZSCHEME_LIBS="${path}/libmzscheme3m.a"
+	  MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
+	elif test -f "${path}/libracket3m.a"; then
+	  MZSCHEME_LIBS="${path}/libracket3m.a"
+	  MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
+	elif test -f "${path}/libracket.a"; then
+	  MZSCHEME_LIBS="${path}/libracket.a ${path}/libmzgc.a"
+	elif test -f "${path}/libmzscheme.a"; then
+	  MZSCHEME_LIBS="${path}/libmzscheme.a ${path}/libmzgc.a"
+	else
+	  	  if test -f "${path}/libmzscheme3m.so"; then
+	    MZSCHEME_LIBS="-L${path} -lmzscheme3m"
+	    MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
+	  elif test -f "${path}/libracket3m.so"; then
+	    MZSCHEME_LIBS="-L${path} -lracket3m"
+	    MZSCHEME_CFLAGS="-DMZ_PRECISE_GC"
+	  elif test -f "${path}/libracket.so"; then
+	    MZSCHEME_LIBS="-L${path} -lracket -lmzgc"
+	  else
+	    	    if test "$path" != "$SCHEME_LIB"; then
+	      continue
+	    fi
+	    MZSCHEME_LIBS="-L${path} -lmzscheme -lmzgc"
+	  fi
+	  if test "$GCC" = yes; then
+	    	    	    MZSCHEME_LIBS="${MZSCHEME_LIBS} -Wl,-rpath -Wl,${path}"
+	  elif test "`(uname) 2>/dev/null`" = SunOS &&
+				   uname -r | grep '^5' >/dev/null; then
+	    MZSCHEME_LIBS="${MZSCHEME_LIBS} -R ${path}"
+	  fi
+	fi
       fi
-      if test "$GCC" = yes; then
-			MZSCHEME_LIBS="${MZSCHEME_LIBS} -Wl,-rpath -Wl,${vi_cv_path_mzscheme_pfx}/lib"
-      elif test "`(uname) 2>/dev/null`" = SunOS &&
-			       uname -r | grep '^5' >/dev/null; then
-	MZSCHEME_LIBS="${MZSCHEME_LIBS} -R ${vi_cv_path_mzscheme_pfx}/lib"
+      if test "X$MZSCHEME_LIBS" != "X"; then
+	break
       fi
+    done
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking if racket requires -pthread" >&5
+$as_echo_n "checking if racket requires -pthread... " >&6; }
+    if test "X$SCHEME_LIB" != "X" && $FGREP -e -pthread "$SCHEME_LIB/buildinfo" >/dev/null ; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+      MZSCHEME_LIBS="${MZSCHEME_LIBS} -pthread"
+      MZSCHEME_CFLAGS="${MZSCHEME_CFLAGS} -pthread"
+    else
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+    fi
+
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for racket config directory" >&5
+$as_echo_n "checking for racket config directory... " >&6; }
+    SCHEME_CONFIGDIR=`${vi_cv_path_mzscheme} -e '(require setup/dirs)(let ((p (find-config-dir))) (when (path? p) (display p)))'`
+    if test "X$SCHEME_CONFIGDIR" != "X"; then
+      MZSCHEME_CFLAGS="${MZSCHEME_CFLAGS} -DMZSCHEME_CONFIGDIR='\"${SCHEME_CONFIGDIR}\"'"
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${SCHEME_CONFIGDIR}" >&5
+$as_echo "${SCHEME_CONFIGDIR}" >&6; }
+    else
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: not found" >&5
+$as_echo "not found" >&6; }
     fi
 
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for racket collects directory" >&5
 $as_echo_n "checking for racket collects directory... " >&6; }
-    if test -d $vi_cv_path_mzscheme_pfx/lib/plt/collects; then
-      SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/lib/plt/
-    else
-      if test -d $vi_cv_path_mzscheme_pfx/lib/racket/collects; then
-	SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/lib/racket/
+    SCHEME_COLLECTS=`${vi_cv_path_mzscheme} -e '(require setup/dirs)(let ((p (find-collects-dir))) (when (path? p) (let-values (((base _1 _2) (split-path p))) (display base))))'`
+    if test "X$SCHEME_COLLECTS" = "X"; then
+      if test -d "$vi_cv_path_mzscheme_pfx/lib/plt/collects"; then
+	SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/lib/plt/
       else
-	if test -d $vi_cv_path_mzscheme_pfx/share/racket/collects; then
-	  SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/share/racket/
+	if test -d "$vi_cv_path_mzscheme_pfx/lib/racket/collects"; then
+	  SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/lib/racket/
 	else
-	  if test -d $vi_cv_path_mzscheme_pfx/collects; then
-	    SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/
+	  if test -d "$vi_cv_path_mzscheme_pfx/share/racket/collects"; then
+	    SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/share/racket/
+	  else
+	    if test -d "$vi_cv_path_mzscheme_pfx/collects"; then
+	      SCHEME_COLLECTS=$vi_cv_path_mzscheme_pfx/
+	    fi
 	  fi
 	fi
       fi
@@ -5456,7 +5535,6 @@ $as_echo_n "checking for mzscheme_base.c... " >&6; }
     fi
     if test "X$MZSCHEME_EXTRA" != "X" ; then
             MZSCHEME_CFLAGS="${MZSCHEME_CFLAGS} -DINCLUDE_MZSCHEME_BASE"
-      MZSCHEME_MZC="${vi_cv_path_mzscheme_pfx}/bin/mzc"
       { $as_echo "$as_me:${as_lineno-$LINENO}: result: needed" >&5
 $as_echo "needed" >&6; }
     else
@@ -5571,6 +5649,9 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_perlinterp" >&5
 $as_echo "$enable_perlinterp" >&6; }
 if test "$enable_perlinterp" = "yes" -o "$enable_perlinterp" = "dynamic"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    as_fn_error $? "cannot use Perl with tiny or small features" "$LINENO" 5
+  fi
 
   # Extract the first word of "perl", so it can be a program name with args.
 set dummy perl; ac_word=$2
@@ -5646,9 +5727,18 @@ $as_echo "OK" >&6; }
       vi_cv_perllib=`$vi_cv_path_perl -MConfig -e 'print $Config{privlibexp}'`
       vi_cv_perlsitelib=`$vi_cv_path_perl -MConfig -e 'print $Config{sitelibexp}'`
 
+      vi_cv_perl_extutils=unknown_perl_extutils_path
+      for extutils_rel_path in ExtUtils vendor_perl/ExtUtils; do
+	xsubpp_path="$vi_cv_perllib/$extutils_rel_path/xsubpp"
+	if test -f "$xsubpp_path"; then
+	  vi_cv_perl_xsubpp="$xsubpp_path"
+	fi
+      done
 
-            perlcppflags=`$vi_cv_path_perl -Mlib=$srcdir -MExtUtils::Embed \
-	      -e 'ccflags;perl_inc;print"\n"' | sed -e 's/-fno[^ ]*//'`
+
+                  perlcppflags=`$vi_cv_path_perl -Mlib=$srcdir -MExtUtils::Embed \
+	      -e 'ccflags;perl_inc;print"\n"' | sed -e 's/-fno[^ ]*//' \
+			-e 's/-fdebug-prefix-map[^ ]*//g'`
             perllibs=`cd $srcdir; $vi_cv_path_perl -MExtUtils::Embed -e 'ldopts' | \
 		sed -e '/Warning/d' -e '/Note (probably harmless)/d' \
 			-e 's/-bE:perl.exp//' -e 's/-lc //'`
@@ -5740,7 +5830,13 @@ $as_echo ">>> too old; need Perl version 5.003_01 or later <<<" >&6; }
     if test "$perl_ok" = "yes" -a "X$libperl" != "X"; then
       $as_echo "#define DYNAMIC_PERL 1" >>confdefs.h
 
-      PERL_CFLAGS="-DDYNAMIC_PERL_DLL=\\\"$libperl\\\" $PERL_CFLAGS"
+      if ${vi_cv_dll_name_perl+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  vi_cv_dll_name_perl="$libperl"
+fi
+
+      PERL_CFLAGS="-DDYNAMIC_PERL_DLL=\\\"$vi_cv_dll_name_perl\\\" $PERL_CFLAGS"
     fi
   fi
 
@@ -5767,6 +5863,10 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_pythoninterp" >&5
 $as_echo "$enable_pythoninterp" >&6; }
 if test "$enable_pythoninterp" = "yes" -o "$enable_pythoninterp" = "dynamic"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    as_fn_error $? "cannot use Python with tiny or small features" "$LINENO" 5
+  fi
+
     for ac_prog in python2 python
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
@@ -5923,17 +6023,34 @@ __:
 	@echo "python_LINKFORSHARED='$(LINKFORSHARED)'"
 	@echo "python_DLLLIBRARY='$(DLLLIBRARY)'"
 	@echo "python_INSTSONAME='$(INSTSONAME)'"
+	@echo "python_PYTHONFRAMEWORK='$(PYTHONFRAMEWORK)'"
+	@echo "python_PYTHONFRAMEWORKPREFIX='$(PYTHONFRAMEWORKPREFIX)'"
+	@echo "python_PYTHONFRAMEWORKINSTALLDIR='$(PYTHONFRAMEWORKINSTALLDIR)'"
 eof
 	    	    eval "`cd ${PYTHON_CONFDIR} && make -f "${tmp_mkf}" __ | sed '/ directory /d'`"
 	    rm -f -- "${tmp_mkf}"
 	    if test "x$MACOSX" = "xyes" && ${vi_cv_path_python} -c \
 		"import sys; sys.exit(${vi_cv_var_python_version} < 2.3)"; then
 	      vi_cv_path_python_plibs="-framework Python"
+	      if test "x${vi_cv_path_python}" != "x/usr/bin/python" && test -n "${python_PYTHONFRAMEWORKPREFIX}"; then
+		  vi_cv_path_python_plibs="-F${python_PYTHONFRAMEWORKPREFIX} -framework Python"
+	      fi
 	    else
 	      if test "${vi_cv_var_python_version}" = "1.4"; then
 		  vi_cv_path_python_plibs="${PYTHON_CONFDIR}/libModules.a ${PYTHON_CONFDIR}/libPython.a ${PYTHON_CONFDIR}/libObjects.a ${PYTHON_CONFDIR}/libParser.a"
 	      else
 		  vi_cv_path_python_plibs="-L${PYTHON_CONFDIR} -lpython${vi_cv_var_python_version}"
+	      fi
+	      	      	      	      if test -n "${python_LINKFORSHARED}" && test -n "${python_PYTHONFRAMEWORKPREFIX}"; then
+	        python_link_symbol=`echo ${python_LINKFORSHARED} | sed 's/\([^ \t][^ \t]*[ \t][ \t]*[^ \t][^ \t]*\)[ \t].*/\1/'`
+		python_link_path=`echo ${python_LINKFORSHARED} |   sed 's/\([^ \t][^ \t]*[ \t][ \t]*[^ \t][^ \t]*\)[ \t][ \t]*\(.*\)/\2/'`
+	        if test -n "${python_link_path}" && ! test -x "${python_link_path}"; then
+	          		  	          python_link_path="${python_PYTHONFRAMEWORKPREFIX}/${python_link_path}"
+		  if test -n "${python_link_path}" && ! test -x "${python_link_path}"; then
+		    		    python_link_path="${python_PYTHONFRAMEWORKINSTALLDIR}/Versions/${vi_cv_var_python_version}/${python_PYTHONFRAMEWORK}"
+	            	            		  fi
+	          python_LINKFORSHARED="${python_link_symbol} ${python_link_path}"
+	        fi
 	      fi
 	      vi_cv_path_python_plibs="${vi_cv_path_python_plibs} ${python_BASEMODLIBS} ${python_LIBS} ${python_SYSLIBS} ${python_LINKFORSHARED}"
 	      	      vi_cv_path_python_plibs=`echo $vi_cv_path_python_plibs | sed s/-ltermcap//`
@@ -5941,7 +6058,9 @@ eof
 
 fi
 
-	if ${vi_cv_dll_name_python+:} false; then :
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking Python's dll name" >&5
+$as_echo_n "checking Python's dll name... " >&6; }
+if ${vi_cv_dll_name_python+:} false; then :
   $as_echo_n "(cached) " >&6
 else
 
@@ -5952,7 +6071,8 @@ else
 	  fi
 
 fi
-
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $vi_cv_dll_name_python" >&5
+$as_echo "$vi_cv_dll_name_python" >&6; }
 
 	PYTHON_LIBS="${vi_cv_path_python_plibs}"
 	if test "${vi_cv_path_python_pfx}" = "${vi_cv_path_python_epfx}"; then
@@ -6090,6 +6210,10 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_python3interp" >&5
 $as_echo "$enable_python3interp" >&6; }
 if test "$enable_python3interp" = "yes" -o "$enable_python3interp" = "dynamic"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    as_fn_error $? "cannot use Python with tiny or small features" "$LINENO" 5
+  fi
+
     for ac_prog in python3 python
 do
   # Extract the first word of "$ac_prog", so it can be a program name with args.
@@ -6273,7 +6397,9 @@ eof
 
 fi
 
-	if ${vi_cv_dll_name_python3+:} false; then :
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: checking Python3's dll name" >&5
+$as_echo_n "checking Python3's dll name... " >&6; }
+if ${vi_cv_dll_name_python3+:} false; then :
   $as_echo_n "(cached) " >&6
 else
 
@@ -6284,7 +6410,8 @@ else
 	  fi
 
 fi
-
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $vi_cv_dll_name_python3" >&5
+$as_echo "$vi_cv_dll_name_python3" >&6; }
 
         PYTHON3_LIBS="${vi_cv_path_python3_plibs}"
         if test "${vi_cv_path_python3_pfx}" = "${vi_cv_path_python3_epfx}"; then
@@ -6396,6 +6523,15 @@ fi
 
 
 
+
+# Check whether --with-properly-linked-python2-python3 was given.
+if test "${with_properly_linked_python2_python3+set}" = set; then :
+  withval=$with_properly_linked_python2_python3; vi_cv_with_properly_linked_python2_python3="yes"
+else
+  vi_cv_with_properly_linked_python2_python3="no"
+fi
+
+
 if test "$python_ok" = yes && test "$python3_ok" = yes; then
   $as_echo "#define DYNAMIC_PYTHON 1" >>confdefs.h
 
@@ -6405,8 +6541,9 @@ if test "$python_ok" = yes && test "$python3_ok" = yes; then
 $as_echo_n "checking whether we can do without RTLD_GLOBAL for Python... " >&6; }
   cflags_save=$CFLAGS
   CFLAGS="$CFLAGS $PYTHON_CFLAGS"
-  ldflags_save=$LDFLAGS
-    LDFLAGS="-ldl $LDFLAGS"
+  libs_save=$LIBS
+    LIBS="-ldl $LIBS"
+  if test "x$MACOSX" != "xyes" || test "$vi_cv_with_properly_linked_python2_python3" = "yes"; then
   if test "$cross_compiling" = yes; then :
   { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
@@ -6426,7 +6563,7 @@ else
     int no_rtl_global_needed_for(char *python_instsoname, char *prefix)
     {
       int needed = 0;
-      void* pylib = dlopen(python_instsoname, RTLD_LAZY);
+      void* pylib = dlopen(python_instsoname, RTLD_LAZY|RTLD_LOCAL);
       if (pylib != 0)
       {
           void (*pfx)(char *home) = dlsym(pylib, "Py_SetPythonHome");
@@ -6464,14 +6601,14 @@ fi
 
 
   CFLAGS=$cflags_save
-  LDFLAGS=$ldflags_save
+  LIBS=$libs_save
 
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether we can do without RTLD_GLOBAL for Python3" >&5
 $as_echo_n "checking whether we can do without RTLD_GLOBAL for Python3... " >&6; }
   cflags_save=$CFLAGS
   CFLAGS="$CFLAGS $PYTHON3_CFLAGS"
-  ldflags_save=$LDFLAGS
-    LDFLAGS="-ldl $LDFLAGS"
+  libs_save=$LIBS
+    LIBS="-ldl $LIBS"
   if test "$cross_compiling" = yes; then :
   { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
 $as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
@@ -6492,7 +6629,7 @@ else
     int no_rtl_global_needed_for(char *python_instsoname, wchar_t *prefix)
     {
       int needed = 0;
-      void* pylib = dlopen(python_instsoname, RTLD_LAZY);
+      void* pylib = dlopen(python_instsoname, RTLD_LAZY|RTLD_LOCAL);
       if (pylib != 0)
       {
           void (*pfx)(wchar_t *home) = dlsym(pylib, "Py_SetPythonHome");
@@ -6528,9 +6665,10 @@ rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
   conftest.$ac_objext conftest.beam conftest.$ac_ext
 fi
 
+  fi
 
   CFLAGS=$cflags_save
-  LDFLAGS=$ldflags_save
+  LIBS=$libs_save
 
   PYTHON_SRC="if_python.c"
   PYTHON_OBJ="objects/if_python.o"
@@ -6632,7 +6770,7 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_tclinterp" >&5
 $as_echo "$enable_tclinterp" >&6; }
 
-if test "$enable_tclinterp" = "yes"; then
+if test "$enable_tclinterp" = "yes" -o "$enable_tclinterp" = "dynamic"; then
 
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking --with-tclsh argument" >&5
 $as_echo_n "checking --with-tclsh argument... " >&6; }
@@ -6863,11 +7001,12 @@ fi
   if test "X$vi_cv_path_tcl" != "X"; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking Tcl version" >&5
 $as_echo_n "checking Tcl version... " >&6; }
-    if echo 'exit [expr [info tclversion] < 8.0]' | $vi_cv_path_tcl - ; then
+    if echo 'exit [expr [info tclversion] < 8.0]' | "$vi_cv_path_tcl" - ; then
       tclver=`echo 'puts [info tclversion]' | $vi_cv_path_tcl -`
       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $tclver - OK" >&5
 $as_echo "$tclver - OK" >&6; };
       tclloc=`echo 'set l [info library];set i [string last lib $l];incr i -2;puts [string range $l 0 $i]' | $vi_cv_path_tcl -`
+      tcldll=`echo 'puts libtcl[info tclversion][info sharedlibextension]' | $vi_cv_path_tcl -`
 
       { $as_echo "$as_me:${as_lineno-$LINENO}: checking for location of Tcl include" >&5
 $as_echo_n "checking for location of Tcl include... " >&6; }
@@ -6900,11 +7039,15 @@ $as_echo_n "checking for location of tclConfig.sh script... " >&6; }
 	  	  tclcnf="/System/Library/Frameworks/Tcl.framework"
 	fi
 	for try in $tclcnf; do
-	  if test -f $try/tclConfig.sh; then
+	  if test -f "$try/tclConfig.sh"; then
 	    { $as_echo "$as_me:${as_lineno-$LINENO}: result: $try/tclConfig.sh" >&5
 $as_echo "$try/tclConfig.sh" >&6; }
-	    . $try/tclConfig.sh
-	    	    TCL_LIBS=`eval echo "$TCL_LIB_SPEC $TCL_LIBS"`
+	    . "$try/tclConfig.sh"
+	    	    if test "$enable_tclinterp" = "dynamic"; then
+	      TCL_LIBS=`eval echo "$TCL_STUB_LIB_SPEC $TCL_LIBS"`
+	    else
+	      TCL_LIBS=`eval echo "$TCL_LIB_SPEC $TCL_LIBS"`
+	    fi
 	    	    	    TCL_DEFS=`echo $TCL_DEFS | sed -e 's/\\\\ /\\\\X/g' | tr ' ' '\012' | sed -e '/^[^-]/d' -e '/^-[^D]/d' -e '/-D[^_]/d' -e 's/-D_/ -D_/' | tr '\012' ' ' | sed -e 's/\\\\X/\\\\ /g'`
 	    break
 	  fi
@@ -6920,10 +7063,10 @@ $as_echo_n "checking for Tcl library by myself... " >&6; }
 	    for ver in "" $tclver ; do
 	      for try in $tcllib ; do
 		trylib=tcl$ver$ext
-		if test -f $try/lib$trylib ; then
+		if test -f "$try/lib$trylib" ; then
 		  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $try/lib$trylib" >&5
 $as_echo "$try/lib$trylib" >&6; }
-		  TCL_LIBS="-L$try -ltcl$ver -ldl -lm"
+		  TCL_LIBS="-L\"$try\" -ltcl$ver -ldl -lm"
 		  if test "`(uname) 2>/dev/null`" = SunOS &&
 					 uname -r | grep '^5' >/dev/null; then
 		    TCL_LIBS="$TCL_LIBS -R $try"
@@ -6953,6 +7096,13 @@ $as_echo "<not found>" >&6; }
 $as_echo "too old; need Tcl version 8.0 or later" >&6; }
     fi
   fi
+  if test "$enable_tclinterp" = "dynamic"; then
+    if test "X$TCL_SRC" != "X" -a "X$tcldll" != "X"; then
+      $as_echo "#define DYNAMIC_TCL 1" >>confdefs.h
+
+      TCL_CFLAGS="-DDYNAMIC_TCL_DLL=\\\"$tcldll\\\" -DDYNAMIC_TCL_VER=\\\"$tclver\\\" $TCL_CFLAGS"
+    fi
+  fi
   if test "$fail_if_missing" = "yes" -a -z "$TCL_SRC"; then
     as_fn_error $? "could not configure Tcl" "$LINENO" 5
   fi
@@ -6975,6 +7125,10 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $enable_rubyinterp" >&5
 $as_echo "$enable_rubyinterp" >&6; }
 if test "$enable_rubyinterp" = "yes" -o "$enable_rubyinterp" = "dynamic"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    as_fn_error $? "cannot use Ruby with tiny or small features" "$LINENO" 5
+  fi
+
   { $as_echo "$as_me:${as_lineno-$LINENO}: checking --with-ruby-command argument" >&5
 $as_echo_n "checking --with-ruby-command argument... " >&6; }
 
@@ -7171,8 +7325,49 @@ else
 fi
 
 if test "$enable_netbeans" = "yes"; then
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: cannot use NetBeans with tiny or small features" >&5
+$as_echo "cannot use NetBeans with tiny or small features" >&6; }
+    enable_netbeans="no"
+  else
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
+  fi
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking --disable-channel argument" >&5
+$as_echo_n "checking --disable-channel argument... " >&6; }
+# Check whether --enable-channel was given.
+if test "${enable_channel+set}" = set; then :
+  enableval=$enable_channel;
+else
+  enable_channel="yes"
+fi
+
+if test "$enable_channel" = "yes"; then
+  if test "x$features" = "xtiny" -o "x$features" = "xsmall"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: cannot use channels with tiny or small features" >&5
+$as_echo "cannot use channels with tiny or small features" >&6; }
+    enable_channel="no"
+  else
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+  fi
+else
+  if test "$enable_netbeans" = "yes"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes, netbeans also disabled" >&5
+$as_echo "yes, netbeans also disabled" >&6; }
+    enable_netbeans="no"
+  else
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+  fi
+fi
+
+if test "$enable_channel" = "yes"; then
     { $as_echo "$as_me:${as_lineno-$LINENO}: checking for socket in -lsocket" >&5
 $as_echo_n "checking for socket in -lsocket... " >&6; }
 if ${ac_cv_lib_socket_socket+:} false; then :
@@ -7263,8 +7458,8 @@ _ACEOF
 
 fi
 
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether compiling netbeans integration is possible" >&5
-$as_echo_n "checking whether compiling netbeans integration is possible... " >&6; }
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether compiling with process communication is possible" >&5
+$as_echo_n "checking whether compiling with process communication is possible... " >&6; }
   cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 
@@ -7304,13 +7499,10 @@ if ac_fn_c_try_link "$LINENO"; then :
 $as_echo "yes" >&6; }
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
-$as_echo "no" >&6; }; enable_netbeans="no"
+$as_echo "no" >&6; }; enable_netbeans="no"; enable_channel="no"
 fi
 rm -f core conftest.err conftest.$ac_objext \
     conftest$ac_exeext conftest.$ac_ext
-else
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-$as_echo "yes" >&6; }
 fi
 if test "$enable_netbeans" = "yes"; then
   $as_echo "#define FEAT_NETBEANS_INTG 1" >>confdefs.h
@@ -7318,6 +7510,14 @@ if test "$enable_netbeans" = "yes"; then
   NETBEANS_SRC="netbeans.c"
 
   NETBEANS_OBJ="objects/netbeans.o"
+
+fi
+if test "$enable_channel" = "yes"; then
+  $as_echo "#define FEAT_CHANNEL 1" >>confdefs.h
+
+  CHANNEL_SRC="channel.c"
+
+  CHANNEL_OBJ="objects/channel.o"
 
 fi
 
@@ -8955,6 +9155,84 @@ $as_echo "not found" >&6; }
   fi
 fi
 
+if test "x$GUITYPE" = "xGTK"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking version of Gdk-Pixbuf" >&5
+$as_echo_n "checking version of Gdk-Pixbuf... " >&6; }
+  gdk_pixbuf_version=`$PKG_CONFIG --modversion gdk-pixbuf-2.0`
+  if test "x$gdk_pixbuf_version" != x ; then
+    gdk_pixbuf_version_minor=`echo $gdk_pixbuf_version | \
+      sed -e 's/[0-9][0-9]*\.\([0-9][0-9]*\)\.[0-9][0-9]*/\1/'`
+    if test "x$gdk_pixbuf_version_minor" != x -a \
+      $gdk_pixbuf_version_minor -ge 31 ; then
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: OK." >&5
+$as_echo "OK." >&6; }
+      # Extract the first word of "glib-compile-resources", so it can be a program name with args.
+set dummy glib-compile-resources; ac_word=$2
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+$as_echo_n "checking for $ac_word... " >&6; }
+if ${ac_cv_path_GLIB_COMPILE_RESOURCES+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  case $GLIB_COMPILE_RESOURCES in
+  [\\/]* | ?:[\\/]*)
+  ac_cv_path_GLIB_COMPILE_RESOURCES="$GLIB_COMPILE_RESOURCES" # Let the user override the test with a path.
+  ;;
+  *)
+  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+for as_dir in $PATH
+do
+  IFS=$as_save_IFS
+  test -z "$as_dir" && as_dir=.
+    for ac_exec_ext in '' $ac_executable_extensions; do
+  if as_fn_executable_p "$as_dir/$ac_word$ac_exec_ext"; then
+    ac_cv_path_GLIB_COMPILE_RESOURCES="$as_dir/$ac_word$ac_exec_ext"
+    $as_echo "$as_me:${as_lineno-$LINENO}: found $as_dir/$ac_word$ac_exec_ext" >&5
+    break 2
+  fi
+done
+  done
+IFS=$as_save_IFS
+
+  test -z "$ac_cv_path_GLIB_COMPILE_RESOURCES" && ac_cv_path_GLIB_COMPILE_RESOURCES="no"
+  ;;
+esac
+fi
+GLIB_COMPILE_RESOURCES=$ac_cv_path_GLIB_COMPILE_RESOURCES
+if test -n "$GLIB_COMPILE_RESOURCES"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: $GLIB_COMPILE_RESOURCES" >&5
+$as_echo "$GLIB_COMPILE_RESOURCES" >&6; }
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+
+
+      { $as_echo "$as_me:${as_lineno-$LINENO}: checking glib-compile-resources" >&5
+$as_echo_n "checking glib-compile-resources... " >&6; }
+      if test "x$GLIB_COMPILE_RESOURCES" = xno ; then
+        { $as_echo "$as_me:${as_lineno-$LINENO}: result: cannot be found in PATH." >&5
+$as_echo "cannot be found in PATH." >&6; }
+      else
+	{ $as_echo "$as_me:${as_lineno-$LINENO}: result: usable." >&5
+$as_echo "usable." >&6; }
+        $as_echo "#define USE_GRESOURCE 1" >>confdefs.h
+
+        GRESOURCE_SRC="auto/gui_gtk_gresources.c"
+        GRESOURCE_OBJ="objects/gui_gtk_gresources.o"
+      fi
+    else
+      { $as_echo "$as_me:${as_lineno-$LINENO}: result: not usable." >&5
+$as_echo "not usable." >&6; }
+    fi
+  else
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: cannot obtain from pkg_config." >&5
+$as_echo "cannot obtain from pkg_config." >&6; }
+  fi
+fi
+
+
+
+
 
 if test -z "$SKIP_MOTIF"; then
   gui_XXX="/usr/XXX/Motif* /usr/Motif*/XXX /usr/XXX /usr/shlib /usr/X11*/XXX /usr/XXX/X11* /usr/dt/XXX /local/Motif*/XXX /local/XXX/Motif* /usr/local/Motif*/XXX /usr/local/XXX/Motif* /usr/local/XXX /usr/local/X11*/XXX /usr/local/LessTif/Motif*/XXX $MOTIFHOME/XXX"
@@ -9377,6 +9655,7 @@ done
   CPPFLAGS=$cppflags_save
 fi
 
+
 if test -z "$SKIP_ATHENA" -o -z "$SKIP_NEXTAW" -o -z "$SKIP_MOTIF" -o -z "$SKIP_GTK2"; then
     cppflags_save=$CPPFLAGS
   CPPFLAGS="$CPPFLAGS $X_CFLAGS"
@@ -9548,10 +9827,10 @@ fi
 
 
 
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for CYGWIN environment" >&5
-$as_echo_n "checking for CYGWIN environment... " >&6; }
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for CYGWIN or MSYS environment" >&5
+$as_echo_n "checking for CYGWIN or MSYS environment... " >&6; }
 case `uname` in
-    CYGWIN*)    CYGWIN=yes; { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+    CYGWIN*|MSYS*)    CYGWIN=yes; { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
                 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for CYGWIN clipboard support" >&5
 $as_echo_n "checking for CYGWIN clipboard support... " >&6; }
@@ -9912,7 +10191,7 @@ fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
 fi
 
-for ac_header in stdarg.h stdint.h stdlib.h string.h \
+for ac_header in stdint.h stdlib.h string.h \
 	sys/select.h sys/utsname.h termcap.h fcntl.h \
 	sgtty.h sys/ioctl.h sys/time.h sys/types.h \
 	termio.h iconv.h inttypes.h langinfo.h math.h \
@@ -11524,7 +11803,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -11570,7 +11849,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -11594,7 +11873,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -11639,7 +11918,7 @@ else
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -11663,7 +11942,7 @@ rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
     We can't simply define LARGE_OFF_T to be 9223372036854775807,
     since some C++ compilers masquerading as C compilers
     incorrectly reject 9223372036854775807.  */
-#define LARGE_OFF_T ((((off_t) 1 << 31) << 31) - 1 + (((off_t) 1 << 31) << 31))
+#define LARGE_OFF_T (((off_t) 1 << 62) - 1 + ((off_t) 1 << 62))
   int off_t_is_large[(LARGE_OFF_T % 2147483629 == 721
 		       && LARGE_OFF_T % 2147483647 == 1)
 		      ? 1 : -1];
@@ -12226,6 +12505,38 @@ rm -f core conftest.err conftest.$ac_objext \
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
+fi
+
+if test "x$GTK_CFLAGS" != "x"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: checking for pango_shape_full" >&5
+$as_echo_n "checking for pango_shape_full... " >&6; }
+  ac_save_CFLAGS="$CFLAGS"
+  ac_save_LIBS="$LIBS"
+  CFLAGS="$CFLAGS $GTK_CFLAGS"
+  LIBS="$LIBS $GTK_LIBS"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+#include <gtk/gtk.h>
+int
+main ()
+{
+ pango_shape_full(NULL, 0, NULL, 0, NULL, NULL);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }; $as_echo "#define HAVE_PANGO_SHAPE_FULL 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+  CFLAGS="$ac_save_CFLAGS"
+  LIBS="$ac_save_LIBS"
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking --disable-gpm argument" >&5
@@ -12809,16 +13120,15 @@ $as_echo "$vim_cv_memcpy_handles_overlap" >&6; }
 fi
 
 
-
-if test "$enable_multibyte" = "yes"; then
+if test "x$with_x" = "xyes"; then
   cflags_save=$CFLAGS
-  ldflags_save=$LDFLAGS
-  if test "x$x_includes" != "xNONE" ; then
-    CFLAGS="$CFLAGS -I$x_includes"
-    LDFLAGS="$X_LIBS $LDFLAGS -lX11"
-    { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether X_LOCALE needed" >&5
+  libs_save=$LIBS
+  LIBS="$LIBS $X_LIBS $GUI_LIB_LOC $GUI_X_LIBS $X_PRE_LIBS $X_LIB $X_EXTRA_LIBS"
+  CFLAGS="$CFLAGS $X_CFLAGS"
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether X_LOCALE needed" >&5
 $as_echo_n "checking whether X_LOCALE needed... " >&6; }
-    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
 #include <X11/Xlocale.h>
 int
@@ -12851,7 +13161,7 @@ _ACEOF
 if ac_fn_c_try_link "$LINENO"; then :
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-		$as_echo "#define X_LOCALE 1" >>confdefs.h
+	      $as_echo "#define X_LOCALE 1" >>confdefs.h
 
 else
   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
@@ -12864,9 +13174,41 @@ else
 $as_echo "no" >&6; }
 fi
 rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-  fi
+
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether Xutf8SetWMProperties() can be used" >&5
+$as_echo_n "checking whether Xutf8SetWMProperties() can be used... " >&6; }
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char Xutf8SetWMProperties ();
+int
+main ()
+{
+return Xutf8SetWMProperties ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+	      $as_echo "#define HAVE_XUTF8SETWMPROPERTIES 1" >>confdefs.h
+
+else
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+
   CFLAGS=$cflags_save
-  LDFLAGS=$ldflags_save
+  LIBS=$libs_save
 fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for _xpg4_setrunelocale in -lxpg4" >&5
@@ -13052,7 +13394,7 @@ rm -f core conftest.err conftest.$ac_objext \
       { $as_echo "$as_me:${as_lineno-$LINENO}: result: msgfmt not found - disabled" >&5
 $as_echo "msgfmt not found - disabled" >&6; };
     fi
-    if test $have_gettext = "yes"; then
+    if test $have_gettext = "yes" -a "x$features" != "xtiny" -a "x$features" != "xsmall"; then
       $as_echo "#define HAVE_GETTEXT 1" >>confdefs.h
 
       MAKEMO=yes

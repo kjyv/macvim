@@ -4,13 +4,19 @@
 # source files for all source archives
 SRC_ALL =	\
 		.hgignore \
+		.travis.yml \
+		appveyor.yml \
 		src/README.txt \
+		src/alloc.h \
 		src/arabic.c \
 		src/arabic.h \
 		src/ascii.h \
 		src/blowfish.c \
 		src/buffer.c \
+		src/channel.c \
 		src/charset.c \
+		src/crypt.c \
+		src/crypt_zip.c \
 		src/diff.c \
 		src/digraph.c \
 		src/edit.c \
@@ -34,6 +40,8 @@ SRC_ALL =	\
 		src/gui_beval.h \
 		src/hardcopy.c \
 		src/hashtab.c \
+		src/json.c \
+		src/json_test.c \
 		src/keymap.h \
 		src/macros.h \
 		src/main.c \
@@ -80,8 +88,12 @@ SRC_ALL =	\
 		src/xxd/xxd.c \
 		src/main.aap \
 		src/testdir/main.aap \
+		src/testdir/README.txt \
+		src/testdir/Make_all.mak \
 		src/testdir/*.in \
+		src/testdir/*.py \
 		src/testdir/sautest/autoload/*.vim \
+		src/testdir/runtest.vim \
 		src/testdir/test[0-9]*.ok \
 		src/testdir/test[0-9]*a.ok \
 		src/testdir/test_[a-z]*.ok \
@@ -99,10 +111,16 @@ SRC_ALL =	\
 		src/testdir/pythonx/topmodule/submodule/subsubmodule/subsubsubmodule.py \
 		src/testdir/python_after/*.py \
 		src/testdir/python_before/*.py \
+		src/testdir/bench*.in \
+		src/testdir/bench*.vim \
+		src/testdir/samples/*.txt \
 		src/proto.h \
 		src/proto/blowfish.pro \
 		src/proto/buffer.pro \
+		src/proto/channel.pro \
 		src/proto/charset.pro \
+		src/proto/crypt.pro \
+		src/proto/crypt_zip.pro \
 		src/proto/diff.pro \
 		src/proto/digraph.pro \
 		src/proto/edit.pro \
@@ -119,6 +137,7 @@ SRC_ALL =	\
 		src/proto/gui_beval.pro \
 		src/proto/hardcopy.pro \
 		src/proto/hashtab.pro \
+		src/proto/json.pro \
 		src/proto/main.pro \
 		src/proto/mark.pro \
 		src/proto/mbyte.pro \
@@ -158,6 +177,7 @@ SRC_UNIX =	\
 		README_src.txt \
 		configure \
 		pixmaps/*.xpm \
+		pixmaps/*.png \
 		pixmaps/gen-inline-pixbufs.sh \
 		pixmaps/stock_icons.h \
 		src/INSTALL \
@@ -178,6 +198,7 @@ SRC_UNIX =	\
 		src/gui_gtk_f.c \
 		src/gui_gtk_f.h \
 		src/gui_gtk_x11.c \
+		src/gui_gtk_res.xml \
 		src/gui_motif.c \
 		src/gui_xmdlg.c \
 		src/gui_xmebw.c \
@@ -203,6 +224,7 @@ SRC_UNIX =	\
 		src/proto/gui_athena.pro \
 		src/proto/gui_gtk.pro \
 		src/proto/gui_gtk_x11.pro \
+		src/proto/gui_gtk_gresources.pro \
 		src/proto/gui_motif.pro \
 		src/proto/gui_xmdlg.pro \
 		src/proto/gui_x11.pro \
@@ -272,6 +294,7 @@ SRC_DOS =	\
 		src/Make_bc3.mak \
 		src/Make_bc5.mak \
 		src/Make_cyg.mak \
+		src/Make_cyg_ming.mak \
 		src/Make_djg.mak \
 		src/Make_ivc.mak \
 		src/Make_dvc.mak \
@@ -289,6 +312,8 @@ SRC_DOS =	\
 		src/dosinst.h \
 		src/glbl_ime.cpp \
 		src/glbl_ime.h \
+		src/gui_dwrite.cpp \
+		src/gui_dwrite.h \
 		src/gui_w16.c \
 		src/gui_w32.c \
 		src/gui_w48.c \
@@ -297,6 +322,7 @@ SRC_DOS =	\
 		src/if_ole.cpp \
 		src/if_ole.h \
 		src/if_ole.idl \
+		src/if_perl_msvc/stdbool.h \
 		src/iid_ole.c \
 		src/os_dos.h \
 		src/os_msdos.c \
@@ -331,11 +357,11 @@ SRC_DOS =	\
 		src/xpm_w32.h \
 		src/xxd/Make_bc3.mak \
 		src/xxd/Make_bc5.mak \
-		src/xxd/Make_cyg.mak \
 		src/xxd/Make_djg.mak \
 		src/xxd/Make_ming.mak \
 		src/xxd/Make_mvc.mak \
 		nsis/gvim.nsi \
+		nsis/gvim_version.nsh \
 		nsis/README.txt \
 		uninstal.txt \
 		src/VisVim/Commands.cpp \
@@ -426,15 +452,6 @@ SRC_VMS =	\
 		src/xxd/Make_vms.mms \
 		vimtutor.com \
 
-# source files for OS/2 (in the extra archive)
-SRC_OS2 =	\
-		src/Make_os2.mak \
-		src/os_os2_cfg.h \
-		src/testdir/Make_os2.mak \
-		src/testdir/todos.vim \
-		src/testdir/os2.vim \
-		src/xxd/Make_os2.mak \
-
 # source files for QNX (in the extra archive)
 SRC_QNX =	\
 		src/os_qnx.c \
@@ -451,7 +468,6 @@ SRC_EXTRA =	\
 		$(SRC_DOS) \
 		$(SRC_DOS_BIN) \
 		$(SRC_MAC) \
-		$(SRC_OS2) \
 		$(SRC_QNX) \
 		$(SRC_VMS) \
 		README_os390.txt \
@@ -470,6 +486,8 @@ SRC_EXTRA =	\
 # runtime files for all distributions
 RT_ALL =	\
 		README.txt \
+		README.md \
+		CONTRIBUTING.md \
 		runtime/bugreport.vim \
 		runtime/doc/*.awk \
 		runtime/doc/*.pl \
@@ -569,6 +587,8 @@ RT_UNIX =	\
 		runtime/vim32x32.xpm \
 		runtime/vim48x48.png \
 		runtime/vim48x48.xpm \
+		runtime/gvim.desktop \
+		runtime/vim.desktop \
 
 # Unix and DOS runtime without CR-LF translation
 RT_UNIX_DOS_BIN =	\
@@ -689,6 +709,7 @@ EXTRA =		\
 		runtime/vimlogo.xpm \
 		src/swis.s \
 		src/tee/Makefile \
+		src/tee/Make_mvc.mak \
 		src/tee/tee.c \
 		csdpmi4b.zip \
 

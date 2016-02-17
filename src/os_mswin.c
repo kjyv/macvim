@@ -161,7 +161,9 @@ extern HWND s_hwnd;
 static HWND s_hwnd = 0;	    /* console window handle, set by GetConsoleHwnd() */
 #endif
 
-extern int WSInitialized;
+#ifdef FEAT_CHANNEL
+int WSInitialized = FALSE; /* WinSock is initialized */
+#endif
 
 /* Don't generate prototypes here, because some systems do have these
  * functions. */
@@ -231,7 +233,7 @@ mch_exit(int r)
 # ifdef FEAT_OLE
     UninitOLE();
 # endif
-# ifdef FEAT_NETBEANS_INTG
+# ifdef FEAT_CHANNEL
     if (WSInitialized)
     {
 	WSInitialized = FALSE;
@@ -277,10 +279,6 @@ mch_early_init(void)
     AnsiUpperBuff(toupper_tab, 256);
     AnsiLowerBuff(tolower_tab, 256);
 #endif
-
-#if defined(FEAT_MBYTE) && !defined(FEAT_GUI)
-    (void)get_cmd_argsW(NULL);
-#endif
 }
 
 
@@ -288,7 +286,7 @@ mch_early_init(void)
  * Return TRUE if the input comes from a terminal, FALSE otherwise.
  */
     int
-mch_input_isatty()
+mch_input_isatty(void)
 {
 #ifdef FEAT_GUI_MSWIN
     return OK;	    /* GUI always has a tty */
@@ -348,7 +346,7 @@ mch_restore_title(
     int which)
 {
 #ifndef FEAT_GUI_MSWIN
-    mch_settitle((which & 1) ? g_szOrigTitle : NULL, NULL);
+    SetConsoleTitle(g_szOrigTitle);
 #endif
 }
 
@@ -357,7 +355,7 @@ mch_restore_title(
  * Return TRUE if we can restore the title (we can)
  */
     int
-mch_can_restore_title()
+mch_can_restore_title(void)
 {
     return TRUE;
 }
@@ -367,7 +365,7 @@ mch_can_restore_title()
  * Return TRUE if we can restore the icon title (we can't)
  */
     int
-mch_can_restore_icon()
+mch_can_restore_icon(void)
 {
     return FALSE;
 }
@@ -415,7 +413,7 @@ mch_FullName(
 	     * - convert the result from UCS2 to 'encoding'.
 	     */
 	    wname = enc_to_utf16(fname, NULL);
-	    if (wname != NULL && _wfullpath(wbuf, wname, MAX_PATH - 1) != NULL)
+	    if (wname != NULL && _wfullpath(wbuf, wname, MAX_PATH) != NULL)
 	    {
 		cname = utf16_to_enc((short_u *)wbuf, NULL);
 		if (cname != NULL)
@@ -485,11 +483,13 @@ mch_isFullName(char_u *fname)
  * commands that use a file name should try to avoid the need to type a
  * backslash twice.
  * When 'shellslash' set do it the other way around.
+ * When the path looks like a URL leave it unmodified.
  */
     void
-slash_adjust(p)
-    char_u  *p;
+slash_adjust(char_u *p)
 {
+    if (path_with_url(p))
+	return;
     while (*p)
     {
 	if (*p == psepcN)
@@ -507,12 +507,16 @@ slash_adjust(p)
     static int
 stat_symlink_aware(const char *name, struct stat *stp)
 {
-#if defined(_MSC_VER) && _MSC_VER < 1700
-    /* Work around for VC10 or earlier. stat() can't handle symlinks properly.
+#if (defined(_MSC_VER) && (_MSC_VER < 1900)) || defined(__MINGW32__)
+    /* Work around for VC12 or earlier (and MinGW). stat() can't handle
+     * symlinks properly.
      * VC9 or earlier: stat() doesn't support a symlink at all. It retrieves
      * status of a symlink itself.
      * VC10: stat() supports a symlink to a normal file, but it doesn't support
-     * a symlink to a directory (always returns an error). */
+     * a symlink to a directory (always returns an error).
+     * VC11 and VC12: stat() doesn't return an error for a symlink to a
+     * directory, but it doesn't set S_IFDIR flag.
+     * MinGW: Same as VC9. */
     WIN32_FIND_DATA	findData;
     HANDLE		hFind, h;
     DWORD		attr = 0;
@@ -541,6 +545,8 @@ stat_symlink_aware(const char *name, struct stat *stp)
 
 	    fd = _open_osfhandle((OPEN_OH_ARGTYPE)h, _O_RDONLY);
 	    n = _fstat(fd, (struct _stat*)stp);
+	    if ((n == 0) && (attr & FILE_ATTRIBUTE_DIRECTORY))
+		stp->st_mode = (stp->st_mode & ~S_IFREG) | S_IFDIR;
 	    _close(fd);
 	    return n;
 	}
@@ -553,12 +559,16 @@ stat_symlink_aware(const char *name, struct stat *stp)
     static int
 wstat_symlink_aware(const WCHAR *name, struct _stat *stp)
 {
-# if defined(_MSC_VER) && _MSC_VER < 1700
-    /* Work around for VC10 or earlier. _wstat() can't handle symlinks properly.
+# if (defined(_MSC_VER) && (_MSC_VER < 1900)) || defined(__MINGW32__)
+    /* Work around for VC12 or earlier (and MinGW). _wstat() can't handle
+     * symlinks properly.
      * VC9 or earlier: _wstat() doesn't support a symlink at all. It retrieves
      * status of a symlink itself.
      * VC10: _wstat() supports a symlink to a normal file, but it doesn't
-     * support a symlink to a directory (always returns an error). */
+     * support a symlink to a directory (always returns an error).
+     * VC11 and VC12: _wstat() doesn't return an error for a symlink to a
+     * directory, but it doesn't set S_IFDIR flag.
+     * MinGW: Same as VC9. */
     int			n;
     BOOL		is_symlink = FALSE;
     HANDLE		hFind, h;
@@ -588,6 +598,8 @@ wstat_symlink_aware(const WCHAR *name, struct _stat *stp)
 
 	    fd = _open_osfhandle((OPEN_OH_ARGTYPE)h, _O_RDONLY);
 	    n = _fstat(fd, stp);
+	    if ((n == 0) && (attr & FILE_ATTRIBUTE_DIRECTORY))
+		stp->st_mode = (stp->st_mode & ~S_IFREG) | S_IFDIR;
 	    _close(fd);
 	    return n;
 	}
@@ -695,7 +707,7 @@ mch_new_shellsize(void)
  * We have no job control, so fake it by starting a new shell.
  */
     void
-mch_suspend()
+mch_suspend(void)
 {
     suspend_shell();
 }
@@ -710,7 +722,7 @@ mch_suspend()
  * Display the saved error message(s).
  */
     void
-display_errors()
+display_errors(void)
 {
     char *p;
 
@@ -851,7 +863,7 @@ can_end_termcap_mode(
  * return non-zero if a character is available
  */
     int
-mch_char_avail()
+mch_char_avail(void)
 {
     /* never used */
     return TRUE;
@@ -931,6 +943,32 @@ check_str_len(char_u *str)
     return 0;
 }
 # endif
+
+/*
+ * Passed to do_in_runtimepath() to load a vim.ico file.
+ */
+    static void
+mch_icon_load_cb(char_u *fname, void *cookie)
+{
+    HANDLE *h = (HANDLE *)cookie;
+
+    *h = LoadImage(NULL,
+		   fname,
+		   IMAGE_ICON,
+		   64,
+		   64,
+		   LR_LOADFROMFILE | LR_LOADMAP3DCOLORS);
+}
+
+/*
+ * Try loading an icon file from 'runtimepath'.
+ */
+    int
+mch_icon_load(HANDLE *iconp)
+{
+    return do_in_runtimepath((char_u *)"bitmaps/vim.ico",
+					      FALSE, mch_icon_load_cb, iconp);
+}
 
     int
 mch_libcall(
@@ -1612,11 +1650,34 @@ mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
 	char_u	*printer_name = (char_u *)devname + devname->wDeviceOffset;
 	char_u	*port_name = (char_u *)devname +devname->wOutputOffset;
 	char_u	*text = _("to %s on %s");
+#ifdef FEAT_MBYTE
+	char_u  *printer_name_orig = printer_name;
+	char_u	*port_name_orig = port_name;
 
+	if (enc_codepage >= 0 && (int)GetACP() != enc_codepage)
+	{
+	    char_u  *to_free = NULL;
+	    int     maxlen;
+
+	    acp_to_enc(printer_name, (int)STRLEN(printer_name), &to_free,
+								    &maxlen);
+	    if (to_free != NULL)
+		printer_name = to_free;
+	    acp_to_enc(port_name, (int)STRLEN(port_name), &to_free, &maxlen);
+	    if (to_free != NULL)
+		port_name = to_free;
+	}
+#endif
 	prt_name = alloc((unsigned)(STRLEN(printer_name) + STRLEN(port_name)
 							     + STRLEN(text)));
 	if (prt_name != NULL)
 	    wsprintf(prt_name, text, printer_name, port_name);
+#ifdef FEAT_MBYTE
+	if (printer_name != printer_name_orig)
+	    vim_free(printer_name);
+	if (port_name != port_name_orig)
+	    vim_free(port_name);
+#endif
     }
     GlobalUnlock(prt_dlg.hDevNames);
 
@@ -1650,16 +1711,22 @@ mch_print_init(prt_settings_T *psettings, char_u *jobname, int forceit)
      */
     psettings->chars_per_line = prt_get_cpl();
     psettings->lines_per_page = prt_get_lpp();
-    psettings->n_collated_copies = (prt_dlg.Flags & PD_COLLATE)
-							? prt_dlg.nCopies : 1;
-    psettings->n_uncollated_copies = (prt_dlg.Flags & PD_COLLATE)
-							? 1 : prt_dlg.nCopies;
+    if (prt_dlg.Flags & PD_USEDEVMODECOPIESANDCOLLATE)
+    {
+	psettings->n_collated_copies = (prt_dlg.Flags & PD_COLLATE)
+						    ? prt_dlg.nCopies : 1;
+	psettings->n_uncollated_copies = (prt_dlg.Flags & PD_COLLATE)
+						    ? 1 : prt_dlg.nCopies;
 
-    if (psettings->n_collated_copies == 0)
+	if (psettings->n_collated_copies == 0)
+	    psettings->n_collated_copies = 1;
+
+	if (psettings->n_uncollated_copies == 0)
+	    psettings->n_uncollated_copies = 1;
+    } else {
 	psettings->n_collated_copies = 1;
-
-    if (psettings->n_uncollated_copies == 0)
 	psettings->n_uncollated_copies = 1;
+    }
 
     psettings->jobname = jobname;
 
@@ -1762,9 +1829,7 @@ static int prt_pos_x = 0;
 static int prt_pos_y = 0;
 
     void
-mch_print_start_line(margin, page_line)
-    int		margin;
-    int		page_line;
+mch_print_start_line(int margin, int page_line)
 {
     if (margin)
 	prt_pos_x = -prt_number_width;
@@ -2001,7 +2066,7 @@ shortcut_end:
  * Bring ourselves to the foreground.  Does work if the OS doesn't allow it.
  */
     void
-win32_set_foreground()
+win32_set_foreground(void)
 {
 # ifndef FEAT_GUI
     GetConsoleHwnd();	    /* get value of s_hwnd */
@@ -2417,9 +2482,9 @@ serverGetVimNames(void)
 }
 
     int
-serverSendReply(name, reply)
-    char_u	*name;		/* Where to send. */
-    char_u	*reply;		/* What to send. */
+serverSendReply(
+    char_u	*name,		/* Where to send. */
+    char_u	*reply)		/* What to send. */
 {
     HWND	target;
     COPYDATASTRUCT data;
@@ -2450,13 +2515,13 @@ serverSendReply(name, reply)
 }
 
     int
-serverSendToVim(name, cmd, result, ptarget, asExpr, silent)
-    char_u	 *name;			/* Where to send. */
-    char_u	 *cmd;			/* What to send. */
-    char_u	 **result;		/* Result of eval'ed expression */
-    void	 *ptarget;		/* HWND of server */
-    int		 asExpr;		/* Expression or keys? */
-    int		 silent;		/* don't complain about no server */
+serverSendToVim(
+    char_u	 *name,			/* Where to send. */
+    char_u	 *cmd,			/* What to send. */
+    char_u	 **result,		/* Result of eval'ed expression */
+    void	 *ptarget,		/* HWND of server */
+    int		 asExpr,		/* Expression or keys? */
+    int		 silent)		/* don't complain about no server */
 {
     HWND	target;
     COPYDATASTRUCT data;
@@ -2509,8 +2574,7 @@ serverSendToVim(name, cmd, result, ptarget, asExpr, silent)
  * Bring the server to the foreground.
  */
     void
-serverForeground(name)
-    char_u	*name;
+serverForeground(char_u *name)
 {
     HWND	target = findServer(name);
 
@@ -3026,3 +3090,22 @@ theend:
 }
 
 #endif /* defined(FEAT_GUI) || defined(FEAT_PRINTER) */
+
+#if defined(FEAT_CHANNEL) || defined(PROTO)
+/*
+ * Initialize the Winsock dll.
+ */
+    void
+channel_init_winsock(void)
+{
+    WSADATA wsaData;
+    int wsaerr;
+
+    if (WSInitialized)
+	return;
+
+    wsaerr = WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (wsaerr == 0)
+	WSInitialized = TRUE;
+}
+#endif

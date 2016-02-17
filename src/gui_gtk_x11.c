@@ -22,6 +22,9 @@
  */
 
 #include "vim.h"
+#ifdef USE_GRESOURCE
+#include "auto/gui_gtk_gresources.h"
+#endif
 
 #ifdef FEAT_GUI_GNOME
 /* Gnome redefines _() and N_().  Grrr... */
@@ -568,7 +571,7 @@ gui_mch_prepare(int *argc, char **argv)
 
 #if defined(EXITFREE) || defined(PROTO)
     void
-gui_mch_free_all()
+gui_mch_free_all(void)
 {
     vim_free(gui_argv);
 #if defined(FEAT_GUI_GNOME) && defined(FEAT_SESSION)
@@ -650,7 +653,7 @@ property_event(GtkWidget *widget,
 	xev.xproperty.atom = commProperty;
 	xev.xproperty.window = commWindow;
 	xev.xproperty.state = PropertyNewValue;
-	serverEventProc(GDK_WINDOW_XDISPLAY(widget->window), &xev);
+	serverEventProc(GDK_WINDOW_XDISPLAY(widget->window), &xev, 0);
     }
     return FALSE;
 }
@@ -1445,6 +1448,18 @@ gui_mch_early_init_check(void)
     int
 gui_mch_init_check(void)
 {
+#ifdef USE_GRESOURCE
+    static int res_registered = FALSE;
+
+    if (!res_registered)
+    {
+	/* Call this function in the GUI process; otherwise, the resources
+	 * won't be available.  Don't call it twice. */
+	res_registered = TRUE;
+	gui_gtk_register_resource();
+    }
+#endif
+
 #ifdef FEAT_GUI_GNOME
     if (gtk_socket_id == 0)
 	using_gnome = 1;
@@ -1680,17 +1695,15 @@ button_press_event(GtkWidget *widget,
 
     switch (event->button)
     {
-    case 1:
-	button = MOUSE_LEFT;
-	break;
-    case 2:
-	button = MOUSE_MIDDLE;
-	break;
-    case 3:
-	button = MOUSE_RIGHT;
-	break;
-    default:
-	return FALSE;		/* Unknown button */
+	/* Keep in sync with gui_x11.c.
+	 * Buttons 4-7 are handled in scroll_event() */
+	case 1: button = MOUSE_LEFT; break;
+	case 2: button = MOUSE_MIDDLE; break;
+	case 3: button = MOUSE_RIGHT; break;
+	case 8: button = MOUSE_X1; break;
+	case 9: button = MOUSE_X2; break;
+	default:
+	    return FALSE;		/* Unknown button */
     }
 
 #ifdef FEAT_XIM
@@ -1999,7 +2012,7 @@ sm_client_check_changed_any(GnomeClient	    *client UNUSED,
      * If there are changed buffers, present the user with
      * a dialog if possible, otherwise give an error message.
      */
-    shutdown_cancelled = check_changed_any(FALSE);
+    shutdown_cancelled = check_changed_any(FALSE, FALSE);
 
     exiting = FALSE;
     cmdmod = save_cmdmod;
@@ -2211,10 +2224,10 @@ setup_save_yourself(void)
  * GTK tells us that XSMP needs attention
  */
     static gboolean
-local_xsmp_handle_requests(source, condition, data)
-    GIOChannel		*source UNUSED;
-    GIOCondition	condition;
-    gpointer		data;
+local_xsmp_handle_requests(
+    GIOChannel		*source UNUSED,
+    GIOCondition	condition,
+    gpointer		data)
 {
     if (condition == G_IO_IN)
     {
@@ -2873,7 +2886,9 @@ create_tabline_menu(void)
     GtkWidget *menu;
 
     menu = gtk_menu_new();
-    add_tabline_menu_item(menu, (char_u *)_("Close"), TABLINE_MENU_CLOSE);
+    if (first_tabpage->tp_next != NULL)
+	add_tabline_menu_item(menu, (char_u *)_("Close tab"),
+							  TABLINE_MENU_CLOSE);
     add_tabline_menu_item(menu, (char_u *)_("New tab"), TABLINE_MENU_NEW);
     add_tabline_menu_item(menu, (char_u *)_("Open Tab..."), TABLINE_MENU_OPEN);
 
@@ -3055,8 +3070,7 @@ gui_mch_update_tabline(void)
  * Set the current tab to "nr".  First tab is 1.
  */
     void
-gui_mch_set_curtab(nr)
-    int		nr;
+gui_mch_set_curtab(int nr)
 {
     if (gui.tabline == NULL)
 	return;
@@ -3620,6 +3634,9 @@ mainwin_destroy_cb(GtkObject *object UNUSED, gpointer data UNUSED)
 		IOSIZE - 1);
 	preserve_exit();
     }
+#ifdef USE_GRESOURCE
+    gui_gtk_unregister_resource();
+#endif
 }
 
 
@@ -3926,7 +3943,7 @@ force_shell_resize_idle(gpointer data)
  * Return TRUE if the main window is maximized.
  */
     int
-gui_mch_maximized()
+gui_mch_maximized(void)
 {
     return (gui.mainwin != NULL && gui.mainwin->window != NULL
 	    && (gdk_window_get_state(gui.mainwin->window)
@@ -3937,7 +3954,7 @@ gui_mch_maximized()
  * Unmaximize the main window
  */
     void
-gui_mch_unmaximize()
+gui_mch_unmaximize(void)
 {
     if (gui.mainwin != NULL)
 	gtk_window_unmaximize(GTK_WINDOW(gui.mainwin));
@@ -3948,7 +3965,7 @@ gui_mch_unmaximize()
  * new Rows and Columns.  This is like resizing the window.
  */
     void
-gui_mch_newfont()
+gui_mch_newfont(void)
 {
     int w, h;
 
@@ -5061,8 +5078,13 @@ not_ascii:
 	     * done, because drawing the cursor would change the display. */
 	    item->analysis.shape_engine = default_shape_engine;
 
+#ifdef HAVE_PANGO_SHAPE_FULL
+	    pango_shape_full((const char *)s + item->offset, item->length,
+		    (const char *)s, len, &item->analysis, glyphs);
+#else
 	    pango_shape((const char *)s + item->offset, item->length,
 			&item->analysis, glyphs);
+#endif
 	    /*
 	     * Fixed-width hack: iterate over the array and assign a fixed
 	     * width to each glyph, thus overriding the choice made by the
@@ -5399,9 +5421,9 @@ input_timer_cb(gpointer data)
  */
     static void
 sniff_request_cb(
-    gpointer	data,
-    gint	source_fd,
-    GdkInputCondition condition)
+    gpointer	data UNUSED,
+    gint	source_fd UNUSED,
+    GdkInputCondition condition UNUSED)
 {
     static char_u bytes[3] = {CSI, (int)KS_EXTRA, (int)KE_SNIFF};
 
@@ -5469,9 +5491,8 @@ gui_mch_wait_for_chars(long wtime)
 	    focus = gui.in_focus;
 	}
 
-#if defined(FEAT_NETBEANS_INTG)
-	/* Process any queued netbeans messages. */
-	netbeans_parse_messages();
+#ifdef MESSAGE_QUEUE
+	parse_queued_messages();
 #endif
 
 	/*

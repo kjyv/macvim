@@ -19,7 +19,6 @@
 @interface MMAppController : NSObject <MMAppProtocol> {
     NSConnection        *connection;
     NSMutableArray      *vimControllers;
-    NSMutableArray      *toAddVimControllers;
     NSString            *openSelectionString;
     NSMutableDictionary *pidArguments;
     NSMenu              *defaultMainMenu;
@@ -32,9 +31,7 @@
     NSMutableDictionary *inputQueues;
     int                 processingFlag;
 
-#if (MAC_OS_X_VERSION_MAX_ALLOWED > MAC_OS_X_VERSION_10_4)
     FSEventStreamRef    fsEventStream;
-#endif
 }
 
 + (MMAppController *)sharedInstance;

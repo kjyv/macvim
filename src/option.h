@@ -213,7 +213,8 @@
 #define SHM_ATTENTION	'A'		/* no ATTENTION messages */
 #define SHM_INTRO	'I'		/* intro messages */
 #define SHM_COMPLETIONMENU  'c'		/* completion menu messages */
-#define SHM_ALL		"rmfixlnwaWtToOsAIc" /* all possible flags for 'shm' */
+#define SHM_RECORDING	'q'		/* short recording message */
+#define SHM_ALL		"rmfixlnwaWtToOsAIcq" /* all possible flags for 'shm' */
 
 /* characters for p_go: */
 #define GO_ASEL		'a'		/* autoselect */
@@ -327,7 +328,7 @@ EXTERN char_u	*p_bs;		/* 'backspace' */
 EXTERN char_u	*p_bg;		/* 'background' */
 EXTERN int	p_bk;		/* 'backup' */
 EXTERN char_u	*p_bkc;		/* 'backupcopy' */
-EXTERN unsigned	bkc_flags;
+EXTERN unsigned	bkc_flags;	/* flags from 'backupcopy' */
 #ifdef IN_OPTION_C
 static char *(p_bkc_values[]) = {"yes", "auto", "no", "breaksymlink", "breakhardlink", NULL};
 #endif
@@ -338,6 +339,37 @@ static char *(p_bkc_values[]) = {"yes", "auto", "no", "breaksymlink", "breakhard
 # define BKC_BREAKHARDLINK	0x010
 EXTERN char_u	*p_bdir;	/* 'backupdir' */
 EXTERN char_u	*p_bex;		/* 'backupext' */
+EXTERN char_u	*p_bo;		/* 'belloff' */
+EXTERN unsigned	bo_flags;
+# ifdef IN_OPTION_C
+static char *(p_bo_values[]) = {"all", "backspace", "cursor", "complete",
+				 "copy", "ctrlg", "error", "esc", "ex",
+				 "hangul", "insertmode", "lang", "mess",
+				 "showmatch", "operator", "register", "shell", 
+				 "spell", "wildmode", NULL};
+# endif
+
+/* values for the 'beepon' option */
+#define BO_ALL		0x0001
+#define BO_BS		0x0002
+#define BO_CRSR		0x0004
+#define BO_COMPL	0x0008
+#define BO_COPY		0x0010
+#define BO_CTRLG	0x0020
+#define BO_ERROR	0x0040
+#define BO_ESC		0x0080
+#define BO_EX		0x0100
+#define BO_HANGUL	0x0200
+#define BO_IM		0x0400
+#define BO_LANG		0x0800
+#define BO_MESS		0x1000
+#define BO_MATCH	0x2000
+#define BO_OPER		0x4000
+#define BO_REG		0x8000
+#define BO_SH		0x10000
+#define BO_SPELL	0x20000
+#define BO_WILD		0x40000
+
 #ifdef FEAT_WILDIGN
 EXTERN char_u	*p_bsk;		/* 'backupskip' */
 #endif
@@ -588,6 +620,7 @@ EXTERN char_u	*p_kp;		/* 'keywordprg' */
 EXTERN char_u	*p_km;		/* 'keymodel' */
 #ifdef FEAT_LANGMAP
 EXTERN char_u	*p_langmap;	/* 'langmap'*/
+EXTERN int	p_lnr;		/* 'langnoremap' */
 #endif
 #if defined(FEAT_MENU) && defined(FEAT_MULTI_LANG)
 EXTERN char_u	*p_lm;		/* 'langmenu' */
@@ -606,8 +639,14 @@ EXTERN char_u	*p_lcs;		/* 'listchars' */
 
 EXTERN int	p_lz;		/* 'lazyredraw' */
 EXTERN int	p_lpl;		/* 'loadplugins' */
+#if defined(DYNAMIC_LUA)
+EXTERN char_u	*p_luadll;	/* 'luadll' */
+#endif
 #ifdef FEAT_GUI_MAC
 EXTERN int	p_macatsui;	/* 'macatsui' */
+#endif
+#ifdef FEAT_GUI_MACVIM
+EXTERN int	p_macligatures;	/* 'macligatures' */
 #endif
 EXTERN int	p_magic;	/* 'magic' */
 #ifdef FEAT_QUICKFIX
@@ -647,7 +686,7 @@ EXTERN int	p_more;		/* 'more' */
 #ifdef FEAT_MZSCHEME
 EXTERN long	p_mzq;		/* 'mzquantum */
 #endif
-#if defined(MSDOS) || defined(MSWIN) || defined(OS2)
+#if defined(MSDOS) || defined(MSWIN)
 EXTERN int	p_odev;		/* 'opendevice' */
 #endif
 EXTERN char_u	*p_opfunc;	/* 'operatorfunc' */
@@ -662,11 +701,23 @@ EXTERN char_u	*p_path;	/* 'path' */
 #ifdef FEAT_SEARCHPATH
 EXTERN char_u	*p_cdpath;	/* 'cdpath' */
 #endif
+#if defined(DYNAMIC_PERL)
+EXTERN char_u	*p_perldll;	/* 'perldll' */
+#endif
+#if defined(DYNAMIC_PYTHON3)
+EXTERN char_u	*p_py3dll;	/* 'pythonthreedll' */
+#endif
+#if defined(DYNAMIC_PYTHON)
+EXTERN char_u	*p_pydll;	/* 'pythondll' */
+#endif
 #ifdef FEAT_RELTIME
 EXTERN long	p_rdt;		/* 'redrawtime' */
 #endif
 EXTERN int	p_remap;	/* 'remap' */
 EXTERN long	p_re;		/* 'regexpengine' */
+#ifdef FEAT_RENDER_OPTIONS
+EXTERN char_u	*p_rop;		/* 'renderoptions' */
+#endif
 EXTERN long	p_report;	/* 'report' */
 #if defined(FEAT_WINDOWS) && defined(FEAT_QUICKFIX)
 EXTERN long	p_pvh;		/* 'previewheight' */
@@ -677,6 +728,9 @@ EXTERN int	p_rs;		/* 'restorescreen' */
 #ifdef FEAT_RIGHTLEFT
 EXTERN int	p_ari;		/* 'allowrevins' */
 EXTERN int	p_ri;		/* 'revins' */
+#endif
+#if defined(DYNAMIC_RUBY)
+EXTERN char_u	*p_rubydll;	/* 'rubydll' */
 #endif
 #ifdef FEAT_CMDL_INFO
 EXTERN int	p_ru;		/* 'ruler' */
@@ -773,17 +827,29 @@ EXTERN char_u	*p_sws;		/* 'swapsync' */
 EXTERN char_u	*p_swb;		/* 'switchbuf' */
 EXTERN unsigned	swb_flags;
 #ifdef IN_OPTION_C
-static char *(p_swb_values[]) = {"useopen", "usetab", "split", "newtab", NULL};
+static char *(p_swb_values[]) = {"useopen", "usetab", "split", "newtab", "vsplit", NULL};
 #endif
 #define SWB_USEOPEN		0x001
 #define SWB_USETAB		0x002
 #define SWB_SPLIT		0x004
 #define SWB_NEWTAB		0x008
+#define SWB_VSPLIT		0x010
 EXTERN int	p_tbs;		/* 'tagbsearch' */
+EXTERN char_u	*p_tc;		/* 'tagcase' */
+EXTERN unsigned tc_flags;       /* flags from 'tagcase' */
+#ifdef IN_OPTION_C
+static char *(p_tc_values[]) = {"followic", "ignore", "match", NULL};
+#endif
+#define TC_FOLLOWIC		0x01
+#define TC_IGNORE		0x02
+#define TC_MATCH		0x04
 EXTERN long	p_tl;		/* 'taglength' */
 EXTERN int	p_tr;		/* 'tagrelative' */
 EXTERN char_u	*p_tags;	/* 'tags' */
 EXTERN int	p_tgst;		/* 'tagstack' */
+#if defined(DYNAMIC_TCL)
+EXTERN char_u	*p_tcldll;	/* 'tcldll' */
+#endif
 #ifdef FEAT_ARABIC
 EXTERN int	p_tbidi;	/* 'termbidi' */
 #endif
@@ -807,6 +873,7 @@ EXTERN char_u	*p_tsr;		/* 'thesaurus' */
 #ifdef FEAT_TRANSPARENCY
 EXTERN long     p_transp;       /* 'transparency' */
 #endif
+EXTERN long     p_blur;         /* 'blurradius' */
 EXTERN int	p_ttimeout;	/* 'ttimeout' */
 EXTERN long	p_ttm;		/* 'ttimeoutlen' */
 EXTERN int	p_tbi;		/* 'ttybuiltin' */
@@ -930,6 +997,9 @@ enum
     , BV_AR
 #ifdef FEAT_QUICKFIX
     , BV_BH
+#endif
+    , BV_BKC
+#ifdef FEAT_QUICKFIX
     , BV_BT
     , BV_EFM
     , BV_GP
@@ -969,6 +1039,7 @@ enum
     , BV_INC
 #endif
     , BV_EOL
+    , BV_FIXEOL
     , BV_EP
     , BV_ET
     , BV_FENC
@@ -1043,6 +1114,7 @@ enum
     , BV_SW
     , BV_SWF
     , BV_TAGS
+    , BV_TC
     , BV_TS
     , BV_TW
     , BV_TX

@@ -686,16 +686,16 @@ py3_runtime_link_init(char *libname, int verbose)
     int
 python3_enabled(int verbose)
 {
-    return py3_runtime_link_init(DYNAMIC_PYTHON3_DLL, verbose) == OK;
+    return py3_runtime_link_init((char *)p_py3dll, verbose) == OK;
 }
 
 /* Load the standard Python exceptions - don't import the symbols from the
  * DLL, as this can cause errors (importing data symbols is not reliable).
  */
-static void get_py3_exceptions __ARGS((void));
+static void get_py3_exceptions(void);
 
     static void
-get_py3_exceptions()
+get_py3_exceptions(void)
 {
     PyObject *exmod = PyImport_ImportModule("builtins");
     PyObject *exdict = PyModule_GetDict(exmod);
@@ -800,7 +800,7 @@ static PyObject *Py3Init_vim(void);
  */
 
     void
-python3_end()
+python3_end(void)
 {
     static int recurse = 0;
 
@@ -828,9 +828,9 @@ python3_end()
     --recurse;
 }
 
-#if (defined(DYNAMIC_PYTHON) && defined(FEAT_PYTHON)) || defined(PROTO)
+#if (defined(DYNAMIC_PYTHON3) && defined(DYNAMIC_PYTHON) && defined(FEAT_PYTHON) && defined(UNIX)) || defined(PROTO)
     int
-python3_loaded()
+python3_loaded(void)
 {
     return (hinstPy3 != 0);
 }
@@ -853,7 +853,10 @@ Python3_Init(void)
 
 
 #ifdef PYTHON3_HOME
-	Py_SetPythonHome(PYTHON3_HOME);
+# ifdef DYNAMIC_PYTHON3
+	if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
+# endif
+	    Py_SetPythonHome(PYTHON3_HOME);
 #endif
 
 	PyImport_AppendInittab("vim", Py3Init_vim);
@@ -1646,11 +1649,18 @@ do_py3eval (char_u *str, typval_T *rettv)
 	    rettv->v_type = VAR_NUMBER;
 	    rettv->vval.v_number = 0;
 	    break;
+	case VAR_NUMBER:
+	case VAR_STRING:
+	case VAR_FLOAT:
+	case VAR_SPECIAL:
+	case VAR_JOB:
+	case VAR_CHANNEL:
+	    break;
     }
 }
 
-    void
+    int
 set_ref_in_python3 (int copyID)
 {
-    set_ref_in_py(copyID);
+    return set_ref_in_py(copyID);
 }

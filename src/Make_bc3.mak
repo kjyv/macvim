@@ -1,5 +1,7 @@
 # Makefile for Borland C++ 3.1 or 4.0 to compile a 16 bit version of Vim.
 #
+# NOTE: THIS IS OLD AND PROBABLY NO LONGER WORKS.
+#
 # There are compilation options at the end of this file.
 #
 # Command line variables:
@@ -54,6 +56,8 @@ EXE_dependencies = \
 	blowfish.obj \
 	buffer.obj \
 	charset.obj \
+	crypt.obj \
+	crypt_zip.obj \
 	diff.obj \
 	digraph.obj \
 	edit.obj \
@@ -68,6 +72,7 @@ EXE_dependencies = \
 	getchar.obj \
 	hardcopy.obj \
 	hashtab.obj \
+	json.obj \
 	main.obj \
 	mark.obj \
 	memfile.obj \

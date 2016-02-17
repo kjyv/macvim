@@ -1,6 +1,8 @@
 #
 # Makefile for VIM on MSDOS, using DJGPP 2.0
 #
+# NOTE: THIS IS OLD AND PROBABLY NO LONGER WORKS.
+#
 
 #>>>>> choose options:
 
@@ -22,6 +24,8 @@ OBJ = \
 	obj/blowfish.o \
 	obj/buffer.o \
 	obj/charset.o \
+	obj/crypt.o \
+	obj/crypt_zip.o \
 	obj/diff.o \
 	obj/digraph.o \
 	obj/edit.o \

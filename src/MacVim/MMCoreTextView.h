@@ -9,9 +9,6 @@
  */
 
 #import <Cocoa/Cocoa.h>
-#import "Miscellaneous.h" // Defines MM_ENABLE_ATSUI
-
-#if !MM_ENABLE_ATSUI
 
 @class MMTextViewHelper;
 
@@ -31,6 +28,7 @@
 
     float                       fontDescent;
     BOOL                        antialias;
+    BOOL                        ligatures;
     NSMutableArray              *drawData;
 
     MMTextViewHelper            *helper;
@@ -81,6 +79,7 @@
 - (void)setPreEditRow:(int)row column:(int)col;
 - (void)setMouseShape:(int)shape;
 - (void)setAntialias:(BOOL)state;
+- (void)setLigatures:(BOOL)state;
 - (void)setImControl:(BOOL)enable;
 - (void)activateIm:(BOOL)enable;
 - (void)checkImState;
@@ -94,7 +93,6 @@
 - (void)keyDown:(NSEvent *)event;
 - (void)insertText:(id)string;
 - (void)doCommandBySelector:(SEL)selector;
-- (BOOL)performKeyEquivalent:(NSEvent *)event;
 
 //
 // NSTextContainer methods
@@ -118,5 +116,3 @@
 @interface MMCoreTextView (ToolTip)
 - (void)setToolTipAtMousePoint:(NSString *)string;
 @end
-
-#endif // !MM_ENABLE_ATSUI
