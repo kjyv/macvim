@@ -118,23 +118,26 @@
 # define ASCII_ISALNUM(c) (ASCII_ISALPHA(c) || VIM_ISDIGIT(c))
 #endif
 
-/* macro version of chartab().
- * Only works with values 0-255!
- * Doesn't work for UTF-8 mode with chars >= 0x80. */
-#define CHARSIZE(c)	(chartab[c] & CT_CELL_MASK)
+/* Returns empty string if it is NULL. */
+#define EMPTY_IF_NULL(x) ((x) ? (x) : (u_char *)"")
 
 #ifdef FEAT_LANGMAP
 /*
  * Adjust chars in a language according to 'langmap' option.
  * NOTE that there is no noticeable overhead if 'langmap' is not set.
  * When set the overhead for characters < 256 is small.
- * Don't apply 'langmap' if the character comes from the Stuff buffer.
+ * Don't apply 'langmap' if the character comes from the Stuff buffer or from
+ * a mapping and the langnoremap option was set.
  * The do-while is just to ignore a ';' after the macro.
  */
 # ifdef FEAT_MBYTE
 #  define LANGMAP_ADJUST(c, condition) \
     do { \
-	if (*p_langmap && (condition) && !KeyStuffed && (c) >= 0) \
+	if (*p_langmap \
+		&& (condition) \
+		&& (!p_lnr || (p_lnr && typebuf_maplen() == 0)) \
+		&& !KeyStuffed \
+		&& (c) >= 0) \
 	{ \
 	    if ((c) < 256) \
 		c = langmap_mapchar[c]; \
@@ -145,7 +148,11 @@
 # else
 #  define LANGMAP_ADJUST(c, condition) \
     do { \
-	if (*p_langmap && (condition) && !KeyStuffed && (c) >= 0 && (c) < 256) \
+	if (*p_langmap \
+		&& (condition) \
+		&& (!p_lnr || (p_lnr && typebuf_maplen() == 0)) \
+		&& !KeyStuffed \
+		&& (c) >= 0 && (c) < 256) \
 	    c = langmap_mapchar[c]; \
     } while (0)
 # endif
@@ -219,7 +226,7 @@
 #if defined(UNIX) || defined(VMS)  /* open in rw------- mode */
 # define mch_open_rw(n, f)	mch_open((n), (f), (mode_t)0600)
 #else
-# if defined(MSDOS) || defined(MSWIN) || defined(OS2)  /* open read/write */
+# if defined(MSDOS) || defined(MSWIN)  /* open read/write */
 #  define mch_open_rw(n, f)	mch_open((n), (f), S_IREAD | S_IWRITE)
 # else
 #  define mch_open_rw(n, f)	mch_open((n), (f), 0)
@@ -264,7 +271,7 @@
 # define mb_ptr_adv(p)	    p += has_mbyte ? (*mb_ptr2len)(p) : 1
 /* Advance multi-byte pointer, do not skip over composing chars. */
 # define mb_cptr_adv(p)	    p += enc_utf8 ? utf_ptr2len(p) : has_mbyte ? (*mb_ptr2len)(p) : 1
-/* Backup multi-byte pointer. */
+/* Backup multi-byte pointer. Only use with "p" > "s" ! */
 # define mb_ptr_back(s, p)  p -= has_mbyte ? ((*mb_head_off)(s, p - 1) + 1) : 1
 /* get length of multi-byte char, not including composing chars */
 # define mb_cptr2len(p)	    (enc_utf8 ? utf_ptr2len(p) : (*mb_ptr2len)(p))
@@ -302,4 +309,14 @@
 #   define RESET_BINDING(wp)
 #  endif
 # endif
+#endif
+
+#ifdef FEAT_DIFF
+# define PLINES_NOFILL(x) plines_nofill(x)
+#else
+# define PLINES_NOFILL(x) plines(x)
+#endif
+
+#if defined(FEAT_CHANNEL) || defined(FEAT_CLIENTSERVER)
+# define MESSAGE_QUEUE
 #endif

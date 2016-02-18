@@ -8,6 +8,7 @@
 @property (readonly) BOOL isDir;
 @property (readonly) MMFileBrowserFSItem *parent;
 @property (nonatomic, retain) NSMutableArray *children;
+@property (nonatomic, assign) char* cpath;
 
 - (id)initWithPath:(NSString *)thePath vim:(MMVimController *)vimInstance;
 - (NSInteger)numberOfChildren; // Returns -1 for leaf nodes

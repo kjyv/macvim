@@ -301,18 +301,18 @@ static struct
 };
 
 /* Local variables */
-static int		s_button_pending = -1;
+static int	s_button_pending = -1;
 
 /* s_getting_focus is set when we got focus but didn't see mouse-up event yet,
  * so don't reset s_button_pending. */
-static int		s_getting_focus = FALSE;
+static int	s_getting_focus = FALSE;
 
-static int		s_x_pending;
-static int		s_y_pending;
-static UINT		s_kFlags_pending;
-static UINT		s_wait_timer = 0;   /* Timer for get char from user */
-static int		s_timed_out = FALSE;
-static int		dead_key = 0;	/* 0 - no dead key, 1 - dead key pressed */
+static int	s_x_pending;
+static int	s_y_pending;
+static UINT	s_kFlags_pending;
+static UINT	s_wait_timer = 0;   /* Timer for get char from user */
+static int	s_timed_out = FALSE;
+static int	dead_key = 0;	/* 0: no dead key, 1: dead key pressed */
 
 #ifdef WIN3264
 static OSVERSIONINFO os_version;    /* like it says.  Init in gui_mch_init() */
@@ -320,8 +320,8 @@ static OSVERSIONINFO os_version;    /* like it says.  Init in gui_mch_init() */
 
 #ifdef FEAT_BEVAL
 /* balloon-eval WM_NOTIFY_HANDLER */
-static void Handle_WM_Notify __ARGS((HWND hwnd, LPNMHDR pnmh));
-static void TrackUserActivity __ARGS((UINT uMsg));
+static void Handle_WM_Notify(HWND hwnd, LPNMHDR pnmh);
+static void TrackUserActivity(UINT uMsg);
 #endif
 
 /*
@@ -614,6 +614,8 @@ _OnChar(
     char_u	string[40];
     int		len = 0;
 
+    dead_key = 0;
+
     len = char_to_string(ch, string, 40, FALSE);
     if (len == 1 && string[0] == Ctrl_C && ctrl_c_interrupts)
     {
@@ -638,6 +640,8 @@ _OnSysChar(
     int		len;
     int		modifiers;
     int		ch = cch;   /* special keys are negative */
+
+    dead_key = 0;
 
     /* TRACE("OnSysChar(%d, %c)\n", ch, ch); */
 
@@ -1008,7 +1012,7 @@ HandleMouseHide(UINT uMsg, LPARAM lParam)
     static LPARAM last_lParam = 0L;
 
     /* We sometimes get a mousemove when the mouse didn't move... */
-    if (uMsg == WM_MOUSEMOVE)
+    if (uMsg == WM_MOUSEMOVE || uMsg == WM_NCMOUSEMOVE)
     {
 	if (lParam == last_lParam)
 	    return;
@@ -1140,7 +1144,7 @@ gui_mch_new_colors(void)
  * Set the colors to their default values.
  */
     void
-gui_mch_def_colors()
+gui_mch_def_colors(void)
 {
     gui.norm_pixel = GetSysColor(COLOR_WINDOWTEXT);
     gui.back_pixel = GetSysColor(COLOR_WINDOW);
@@ -1386,9 +1390,7 @@ gui_mch_get_font(
  */
 /*ARGSUSED*/
     char_u *
-gui_mch_get_fontname(font, name)
-    GuiFont font;
-    char_u  *name;
+gui_mch_get_fontname(GuiFont font, char_u *name)
 {
     if (name == NULL)
 	return NULL;
@@ -1708,6 +1710,34 @@ gui_mch_draw_part_cursor(
     DeleteBrush(hbr);
 }
 
+
+/*
+ * Generates a VK_SPACE when the internal dead_key flag is set to output the
+ * dead key's nominal character and re-post the original message.
+ */
+    static void
+outputDeadKey_rePost(MSG originalMsg)
+{
+    static MSG deadCharExpel;
+
+    if (!dead_key)
+	return;
+
+    dead_key = 0;
+
+    /* Make Windows generate the dead key's character */
+    deadCharExpel.message = originalMsg.message;
+    deadCharExpel.hwnd    = originalMsg.hwnd;
+    deadCharExpel.wParam  = VK_SPACE;
+
+    MyTranslateMessage(&deadCharExpel);
+
+    /* re-generate the current character free of the dead char influence */
+    PostMessage(originalMsg.hwnd, originalMsg.message, originalMsg.wParam,
+							  originalMsg.lParam);
+}
+
+
 /*
  * Process a single Windows message.
  * If one is not available we hang until one is.
@@ -1747,10 +1777,20 @@ process_message(void)
     }
 #endif
 
-#ifdef FEAT_NETBEANS_INTG
+#ifdef FEAT_CHANNEL
     if (msg.message == WM_NETBEANS)
     {
-	netbeans_read();
+	int	    what;
+	channel_T   *channel = channel_fd2channel((sock_T)msg.wParam, &what);
+
+	if (channel != NULL)
+	{
+	    /* Disable error messages, they can mess up the display and throw
+	     * an exception. */
+	    ++emsg_off;
+	    channel_read(channel, what, "process_message");
+	    --emsg_off;
+	}
 	return;
     }
 #endif
@@ -1788,22 +1828,46 @@ process_message(void)
     if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN)
     {
 	vk = (int) msg.wParam;
-	/* handle key after dead key, but ignore shift, alt and control */
-	if (dead_key && vk != VK_SHIFT && vk != VK_MENU && vk != VK_CONTROL)
-	{
-	    dead_key = 0;
-	    /* handle non-alphabetic keys (ones that hopefully cannot generate
-	     * umlaut-characters), unless when control is down */
-	    if (vk < 'A' || vk > 'Z' || (GetKeyState(VK_CONTROL) & 0x8000))
-	    {
-		MSG dm;
 
-		dm.message = msg.message;
-		dm.hwnd = msg.hwnd;
-		dm.wParam = VK_SPACE;
-		MyTranslateMessage(&dm);	/* generate dead character */
-		if (vk != VK_SPACE) /* and send current character once more */
-		    PostMessage(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+	/*
+	 * Handle dead keys in special conditions in other cases we let Windows
+	 * handle them and do not interfere.
+	 *
+	 * The dead_key flag must be reset on several occasions:
+	 * - in _OnChar() (or _OnSysChar()) as any dead key was necessarily
+	 *   consumed at that point (This is when we let Windows combine the
+	 *   dead character on its own)
+	 *
+	 * - Before doing something special such as regenerating keypresses to
+	 *   expel the dead character as this could trigger an infinite loop if
+	 *   for some reason MyTranslateMessage() do not trigger a call
+	 *   immediately to _OnChar() (or _OnSysChar()).
+	 */
+	if (dead_key)
+	{
+	    /*
+	     * If a dead key was pressed and the user presses VK_SPACE,
+	     * VK_BACK, or VK_ESCAPE it means that he actually wants to deal
+	     * with the dead char now, so do nothing special and let Windows
+	     * handle it.
+	     *
+	     * Note that VK_SPACE combines with the dead_key's character and
+	     * only one WM_CHAR will be generated by TranslateMessage(), in
+	     * the two other cases two WM_CHAR will be generated: the dead
+	     * char and VK_BACK or VK_ESCAPE. That is most likely what the
+	     * user expects.
+	     */
+	    if ((vk == VK_SPACE || vk == VK_BACK || vk == VK_ESCAPE))
+	    {
+		dead_key = 0;
+		MyTranslateMessage(&msg);
+		return;
+	    }
+	    /* In modes where we are not typing, dead keys should behave
+	     * normally */
+	    else if (!(get_real_state() & (INSERT | CMDLINE | SELECTMODE)))
+	    {
+		outputDeadKey_rePost(msg);
 		return;
 	    }
 	}
@@ -1823,6 +1887,19 @@ process_message(void)
 	    if (special_keys[i].key_sym == vk
 		    && (vk != VK_SPACE || !(GetKeyState(VK_MENU) & 0x8000)))
 	    {
+		/*
+		 * Behave as exected if we have a dead key and the special key
+		 * is a key that would normally trigger the dead key nominal
+		 * character output (such as a NUMPAD printable character or
+		 * the TAB key, etc...).
+		 */
+		if (dead_key && (special_keys[i].vim_code0 == 'K'
+						|| vk == VK_TAB || vk == CAR))
+		{
+		    outputDeadKey_rePost(msg);
+		    return;
+		}
+
 #ifdef FEAT_MENU
 		/* Check for <F10>: Windows selects the menu.  When <F10> is
 		 * mapped we want to use the mapping instead. */
@@ -2017,9 +2094,8 @@ gui_mch_wait_for_chars(int wtime)
 	    s_need_activate = FALSE;
 	}
 
-#ifdef FEAT_NETBEANS_INTG
-	/* Process the queued netbeans messages. */
-	netbeans_parse_messages();
+#ifdef MESSAGE_QUEUE
+	parse_queued_messages();
 #endif
 
 	/*
@@ -2390,7 +2466,9 @@ show_tabline_popup_menu(void)
     if (tab_pmenu == NULL)
 	return;
 
-    add_tabline_popup_menu_entry(tab_pmenu, TABLINE_MENU_CLOSE, _("Close tab"));
+    if (first_tabpage->tp_next != NULL)
+	add_tabline_popup_menu_entry(tab_pmenu,
+					  TABLINE_MENU_CLOSE, _("Close tab"));
     add_tabline_popup_menu_entry(tab_pmenu, TABLINE_MENU_NEW, _("New tab"));
     add_tabline_popup_menu_entry(tab_pmenu, TABLINE_MENU_OPEN,
 				 _("Open tab..."));
@@ -2550,8 +2628,7 @@ gui_mch_update_tabline(void)
  * Set the current tab to "nr".  First tab is 1.
  */
     void
-gui_mch_set_curtab(nr)
-    int		nr;
+gui_mch_set_curtab(int nr)
 {
     if (s_tabhwnd == NULL)
 	return;
@@ -2785,6 +2862,10 @@ _OnPaint(
 
 	out_flush();	    /* make sure all output has been processed */
 	(void)BeginPaint(hwnd, &ps);
+#if defined(FEAT_DIRECTX)
+	if (IS_ENABLE_DIRECTX())
+	    DWriteContext_BeginDraw(s_dwc);
+#endif
 
 #ifdef FEAT_MBYTE
 	/* prevent multi-byte characters from misprinting on an invalid
@@ -2800,9 +2881,20 @@ _OnPaint(
 #endif
 
 	if (!IsRectEmpty(&ps.rcPaint))
+	{
+#if defined(FEAT_DIRECTX)
+	    if (IS_ENABLE_DIRECTX())
+		DWriteContext_BindDC(s_dwc, s_hdc, &ps.rcPaint);
+#endif
 	    gui_redraw(ps.rcPaint.left, ps.rcPaint.top,
 		    ps.rcPaint.right - ps.rcPaint.left + 1,
 		    ps.rcPaint.bottom - ps.rcPaint.top + 1);
+	}
+
+#if defined(FEAT_DIRECTX)
+	if (IS_ENABLE_DIRECTX())
+	    DWriteContext_EndDraw(s_dwc);
+#endif
 	EndPaint(hwnd, &ps);
     }
 }
@@ -2916,10 +3008,10 @@ gui_mswin_get_valid_dimensions(
 
     base_width = gui_get_base_width()
 	+ (GetSystemMetrics(SM_CXFRAME) +
-           GetSystemMetrics(SM_CXPADDEDBORDER)) * 2;
+	   GetSystemMetrics(SM_CXPADDEDBORDER)) * 2;
     base_height = gui_get_base_height()
 	+ (GetSystemMetrics(SM_CYFRAME) +
-           GetSystemMetrics(SM_CXPADDEDBORDER)) * 2
+	   GetSystemMetrics(SM_CXPADDEDBORDER)) * 2
 	+ GetSystemMetrics(SM_CYCAPTION)
 #ifdef FEAT_MENU
 	+ gui_mswin_get_menu_height(FALSE)
@@ -2982,6 +3074,20 @@ get_scroll_flags(void)
 }
 
 /*
+ * On some Intel GPUs, the regions drawn just prior to ScrollWindowEx()
+ * may not be scrolled out properly.
+ * For gVim, when _OnScroll() is repeated, the character at the
+ * previous cursor position may be left drawn after scroll.
+ * The problem can be avoided by calling GetPixel() to get a pixel in
+ * the region before ScrollWindowEx().
+ */
+    static void
+intel_gpu_workaround(void)
+{
+    GetPixel(s_hdc, FILL_X(gui.col), FILL_Y(gui.row));
+}
+
+/*
  * Delete the given number of lines from the given row, scrolling up any
  * text further down within the scroll region.
  */
@@ -2991,6 +3097,8 @@ gui_mch_delete_lines(
     int	    num_lines)
 {
     RECT	rc;
+
+    intel_gpu_workaround();
 
     rc.left = FILL_X(gui.scroll_region_left);
     rc.right = FILL_X(gui.scroll_region_right + 1);
@@ -3023,6 +3131,8 @@ gui_mch_insert_lines(
 {
     RECT	rc;
 
+    intel_gpu_workaround();
+
     rc.left = FILL_X(gui.scroll_region_left);
     rc.right = FILL_X(gui.scroll_region_right + 1);
     rc.top = FILL_Y(row);
@@ -3043,6 +3153,12 @@ gui_mch_insert_lines(
     void
 gui_mch_exit(int rc)
 {
+#if defined(FEAT_DIRECTX)
+    DWriteContext_Close(s_dwc);
+    DWrite_Final();
+    s_dwc = NULL;
+#endif
+
     ReleaseDC(s_textArea, s_hdc);
     DeleteObject(s_brush);
 
@@ -3069,15 +3185,26 @@ logfont2name(LOGFONT lf)
     char	*p;
     char	*res;
     char	*charset_name;
+    char	*font_name = lf.lfFaceName;
 
     charset_name = charset_id2name((int)lf.lfCharSet);
-    res = alloc((unsigned)(strlen(lf.lfFaceName) + 20
+#ifdef FEAT_MBYTE
+    /* Convert a font name from the current codepage to 'encoding'.
+     * TODO: Use Wide APIs (including LOGFONTW) instead of ANSI APIs. */
+    if (enc_codepage >= 0 && (int)GetACP() != enc_codepage)
+    {
+	int	len;
+	acp_to_enc(lf.lfFaceName, (int)strlen(lf.lfFaceName),
+						(char_u **)&font_name, &len);
+    }
+#endif
+    res = alloc((unsigned)(strlen(font_name) + 20
 		    + (charset_name == NULL ? 0 : strlen(charset_name) + 2)));
     if (res != NULL)
     {
 	p = res;
 	/* make a normal font string out of the lf thing:*/
-	sprintf((char *)p, "%s:h%d", lf.lfFaceName, pixels_to_points(
+	sprintf((char *)p, "%s:h%d", font_name, pixels_to_points(
 			 lf.lfHeight < 0 ? -lf.lfHeight : lf.lfHeight, TRUE));
 	while (*p)
 	{
@@ -3102,6 +3229,10 @@ logfont2name(LOGFONT lf)
 	}
     }
 
+#ifdef FEAT_MBYTE
+    if (font_name != lf.lfFaceName)
+	vim_free(font_name);
+#endif
     return res;
 }
 
@@ -3131,7 +3262,7 @@ update_im_font(void)
  * Handler of gui.wide_font (p_guifontwide) changed notification.
  */
     void
-gui_mch_wide_font_changed()
+gui_mch_wide_font_changed(void)
 {
 # ifndef MSWIN16_FASTTEXT
     LOGFONT lf;
@@ -3258,7 +3389,7 @@ gui_mch_init_font(char_u *font_name, int fontset)
  * Return TRUE if the GUI window is maximized, filling the whole screen.
  */
     int
-gui_mch_maximized()
+gui_mch_maximized(void)
 {
     WINDOWPLACEMENT wp;
 
@@ -3276,22 +3407,35 @@ gui_mch_maximized()
  * new Rows and Columns.  This is like resizing the window.
  */
     void
-gui_mch_newfont()
+gui_mch_newfont(void)
 {
     RECT	rect;
 
     GetWindowRect(s_hwnd, &rect);
-    gui_resize_shell(rect.right - rect.left
-			- (GetSystemMetrics(SM_CXFRAME) +
-                           GetSystemMetrics(SM_CXPADDEDBORDER)) * 2,
-		     rect.bottom - rect.top
-			- (GetSystemMetrics(SM_CYFRAME) +
-                           GetSystemMetrics(SM_CXPADDEDBORDER)) * 2
-			- GetSystemMetrics(SM_CYCAPTION)
+    if (win_socket_id == 0)
+    {
+	gui_resize_shell(rect.right - rect.left
+	    - (GetSystemMetrics(SM_CXFRAME) +
+	       GetSystemMetrics(SM_CXPADDEDBORDER)) * 2,
+	    rect.bottom - rect.top
+	    - (GetSystemMetrics(SM_CYFRAME) +
+	       GetSystemMetrics(SM_CXPADDEDBORDER)) * 2
+	    - GetSystemMetrics(SM_CYCAPTION)
+#ifdef FEAT_MENU
+	    - gui_mswin_get_menu_height(FALSE)
+#endif
+	);
+    }
+    else
+    {
+	/* Inside another window, don't use the frame and border. */
+	gui_resize_shell(rect.right - rect.left,
+	    rect.bottom - rect.top
 #ifdef FEAT_MENU
 			- gui_mswin_get_menu_height(FALSE)
 #endif
-	    );
+	);
+    }
 }
 
 /*
@@ -3693,9 +3837,7 @@ _OnDropFiles(
     DragQueryPoint(hDrop, &pt);
     MapWindowPoints(s_hwnd, s_textArea, &pt, 1);
 
-# ifdef FEAT_VISUAL
     reset_VIsual();
-# endif
 
     fnames = (char_u **)alloc(cFiles * sizeof(char_u *));
 

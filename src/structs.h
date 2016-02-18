@@ -134,6 +134,12 @@ typedef struct
     int		wo_arab;
 # define w_p_arab w_onebuf_opt.wo_arab	/* 'arabic' */
 #endif
+#ifdef FEAT_LINEBREAK
+    int		wo_bri;
+# define w_p_bri w_onebuf_opt.wo_bri	/* 'breakindent' */
+    char_u	*wo_briopt;
+# define w_p_briopt w_onebuf_opt.wo_briopt /* 'breakindentopt' */
+#endif
 #ifdef FEAT_DIFF
     int		wo_diff;
 # define w_p_diff w_onebuf_opt.wo_diff	/* 'diff' */
@@ -346,9 +352,7 @@ struct u_header
 #endif
     int		uh_flags;	/* see below */
     pos_T	uh_namedm[NMARKS];	/* marks before undo/after redo */
-#ifdef FEAT_VISUAL
     visualinfo_T uh_visual;	/* Visual areas before undo/after redo */
-#endif
     time_t	uh_time;	/* timestamp when the change was made */
     long	uh_save_nr;	/* set when the file was saved after the
 				   changes in this block */
@@ -364,7 +368,7 @@ struct u_header
 /*
  * structures used in undo.c
  */
-#if SIZEOF_INT > 2
+#if VIM_SIZEOF_INT > 2
 # define ALIGN_LONG	/* longword alignment and use filler byte */
 # define ALIGN_SIZE (sizeof(long))
 #else
@@ -471,13 +475,17 @@ struct nr_trans
     blocknr_T	nt_new_bnum;		/* new, positive, number */
 };
 
+
+typedef struct buffblock buffblock_T;
+typedef struct buffheader buffheader_T;
+
 /*
  * structure used to store one block of the stuff/redo/recording buffers
  */
 struct buffblock
 {
-    struct buffblock	*b_next;	/* pointer to next buffblock */
-    char_u		b_str[1];	/* contents (actually longer) */
+    buffblock_T	*b_next;	/* pointer to next buffblock */
+    char_u	b_str[1];	/* contents (actually longer) */
 };
 
 /*
@@ -485,10 +493,10 @@ struct buffblock
  */
 struct buffheader
 {
-    struct buffblock	bh_first;	/* first (dummy) block of list */
-    struct buffblock	*bh_curr;	/* buffblock for appending */
-    int			bh_index;	/* index for reading */
-    int			bh_space;	/* space in bh_curr for appending */
+    buffblock_T	bh_first;	/* first (dummy) block of list */
+    buffblock_T	*bh_curr;	/* buffblock for appending */
+    int		bh_index;	/* index for reading */
+    int		bh_space;	/* space in bh_curr for appending */
 };
 
 /*
@@ -542,6 +550,8 @@ typedef struct
     int		keepmarks;		/* TRUE when ":keepmarks" was used */
     int		keepjumps;		/* TRUE when ":keepjumps" was used */
     int		lockmarks;		/* TRUE when ":lockmarks" was used */
+    int		keeppatterns;		/* TRUE when ":keeppatterns" was used */
+    int		noswapfile;		/* TRUE when ":noswapfile" was used */
 # ifdef FEAT_AUTOCMD
     char_u	*save_ei;		/* saved value of 'eventignore' */
 # endif
@@ -568,7 +578,7 @@ struct memfile
     unsigned	mf_page_size;		/* number of bytes in a page */
     int		mf_dirty;		/* TRUE if there are dirty blocks */
 #ifdef FEAT_CRYPT
-    buf_T	*mf_buffer;		/* bufer this memfile is for */
+    buf_T	*mf_buffer;		/* buffer this memfile is for */
     char_u	mf_seed[MF_SEED_LEN];	/* seed for encryption */
 
     /* Values for key, method and seed used for reading data blocks when
@@ -625,7 +635,7 @@ typedef struct memline
     int		ml_flags;
 
     infoptr_T	*ml_stack;	/* stack of pointer blocks (array of IPTRs) */
-    int		ml_stack_top;	/* current top if ml_stack */
+    int		ml_stack_top;	/* current top of ml_stack */
     int		ml_stack_size;	/* total number of entries in ml_stack */
 
     linenr_T	ml_line_lnum;	/* line number of cached line, 0 if not valid */
@@ -671,6 +681,7 @@ typedef struct arglist
 {
     garray_T	al_ga;		/* growarray with the array of file names */
     int		al_refcount;	/* number of windows using this arglist */
+    int		id;		/* id of this arglist */
 } alist_T;
 
 /*
@@ -963,7 +974,8 @@ typedef struct
     int			typebuf_valid;	    /* TRUE when save_typebuf valid */
     int			old_char;
     int			old_mod_mask;
-    struct buffheader	save_stuffbuff;
+    buffheader_T	save_readbuf1;
+    buffheader_T	save_readbuf2;
 #ifdef USE_INPUT_BUF
     char_u		*save_inputbuf;
 #endif
@@ -996,6 +1008,7 @@ typedef struct
 #ifdef FEAT_MBYTE
     vimconv_T	vir_conv;	/* encoding conversion */
 #endif
+    garray_T	vir_barlines;	/* lines starting with | */
 } vir_T;
 
 #define CONV_NONE		0
@@ -1088,7 +1101,7 @@ typedef struct hashtable_S
 typedef long_u hash_T;		/* Type for hi_hash */
 
 
-#if SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
+#if VIM_SIZEOF_INT <= 3		/* use long if int is smaller than 32 bits */
 typedef long	varnumber_T;
 #else
 typedef int	varnumber_T;
@@ -1098,12 +1111,32 @@ typedef double	float_T;
 typedef struct listvar_S list_T;
 typedef struct dictvar_S dict_T;
 
+typedef struct jobvar_S job_T;
+typedef struct readq_S readq_T;
+typedef struct jsonq_S jsonq_T;
+typedef struct cbq_S cbq_T;
+typedef struct channel_S channel_T;
+
+typedef enum
+{
+    VAR_UNKNOWN = 0,
+    VAR_NUMBER,	 /* "v_number" is used */
+    VAR_STRING,	 /* "v_string" is used */
+    VAR_FUNC,	 /* "v_string" is function name */
+    VAR_LIST,	 /* "v_list" is used */
+    VAR_DICT,	 /* "v_dict" is used */
+    VAR_FLOAT,	 /* "v_float" is used */
+    VAR_SPECIAL, /* "v_number" is used */
+    VAR_JOB,	 /* "v_job" is used */
+    VAR_CHANNEL	 /* "v_channel" is used */
+} vartype_T;
+
 /*
  * Structure to hold an internal variable without a name.
  */
 typedef struct
 {
-    char	v_type;	    /* see below: VAR_NUMBER, VAR_STRING, etc. */
+    vartype_T	v_type;
     char	v_lock;	    /* see below: VAR_LOCKED, VAR_FIXED */
     union
     {
@@ -1114,17 +1147,14 @@ typedef struct
 	char_u		*v_string;	/* string value (can be NULL!) */
 	list_T		*v_list;	/* list value (can be NULL!) */
 	dict_T		*v_dict;	/* dict value (can be NULL!) */
+#ifdef FEAT_JOB
+	job_T		*v_job;		/* job value (can be NULL!) */
+#endif
+#ifdef FEAT_CHANNEL
+	channel_T	*v_channel;	/* channel value (can be NULL!) */
+#endif
     }		vval;
 } typval_T;
-
-/* Values for "v_type". */
-#define VAR_UNKNOWN 0
-#define VAR_NUMBER  1	/* "v_number" is used */
-#define VAR_STRING  2	/* "v_string" is used */
-#define VAR_FUNC    3	/* "v_string" is function name */
-#define VAR_LIST    4	/* "v_list" is used */
-#define VAR_DICT    5	/* "v_dict" is used */
-#define VAR_FLOAT   6	/* "v_float" is used */
 
 /* Values for "dv_scope". */
 #define VAR_SCOPE     1	/* a:, v:, s:, etc. scope dictionaries */
@@ -1188,13 +1218,13 @@ struct dictitem_S
     char_u	di_flags;	/* flags (only used for variable) */
     char_u	di_key[1];	/* key (actually longer!) */
 };
-
 typedef struct dictitem_S dictitem_T;
 
-#define DI_FLAGS_RO	1 /* "di_flags" value: read-only variable */
-#define DI_FLAGS_RO_SBX 2 /* "di_flags" value: read-only in the sandbox */
-#define DI_FLAGS_FIX	4 /* "di_flags" value: fixed variable, not allocated */
-#define DI_FLAGS_LOCK	8 /* "di_flags" value: locked variable */
+#define DI_FLAGS_RO	1  /* "di_flags" value: read-only variable */
+#define DI_FLAGS_RO_SBX 2  /* "di_flags" value: read-only in the sandbox */
+#define DI_FLAGS_FIX	4  /* "di_flags" value: fixed: no :unlet or remove() */
+#define DI_FLAGS_LOCK	8  /* "di_flags" value: locked variable */
+#define DI_FLAGS_ALLOC	16 /* "di_flags" value: separately allocated */
 
 /*
  * Structure to hold info about a Dictionary.
@@ -1210,6 +1240,154 @@ struct dictvar_S
     dict_T	*dv_used_next;	/* next dict in used dicts list */
     dict_T	*dv_used_prev;	/* previous dict in used dicts list */
 };
+
+typedef enum
+{
+    JOB_FAILED,
+    JOB_STARTED,
+    JOB_ENDED
+} jobstatus_T;
+
+/*
+ * Structure to hold info about a Job.
+ */
+struct jobvar_S
+{
+#ifdef UNIX
+    pid_t	jv_pid;
+    int		jv_exitval;
+#endif
+#ifdef WIN32
+    PROCESS_INFORMATION	jv_proc_info;
+    HANDLE		jv_job_object;
+#endif
+    jobstatus_T	jv_status;
+
+    int		jv_refcount;	/* reference count */
+    channel_T	*jv_channel;	/* channel for I/O, reference counted */
+};
+
+/*
+ * Structures to hold info about a Channel.
+ */
+struct readq_S
+{
+    char_u	*rq_buffer;
+    readq_T	*rq_next;
+    readq_T	*rq_prev;
+};
+
+struct jsonq_S
+{
+    typval_T	*jq_value;
+    jsonq_T	*jq_next;
+    jsonq_T	*jq_prev;
+};
+
+struct cbq_S
+{
+    char_u	*cq_callback;
+    int		cq_seq_nr;
+    cbq_T	*cq_next;
+    cbq_T	*cq_prev;
+};
+
+/* mode for a channel */
+typedef enum
+{
+    MODE_NL = 0,
+    MODE_RAW,
+    MODE_JSON,
+    MODE_JS
+} ch_mode_T;
+
+/* Ordering matters, it is used in for loops: IN is last, only SOCK/OUT/ERR
+ * are polled. */
+#define CHAN_SOCK   0
+#define CH_SOCK	    ch_pfd[CHAN_SOCK].ch_fd
+
+#ifdef UNIX
+# define CHANNEL_PIPES
+
+# define CHAN_OUT   1
+# define CHAN_ERR   2
+# define CHAN_IN    3
+# define CH_OUT	    ch_pfd[CHAN_OUT].ch_fd
+# define CH_ERR	    ch_pfd[CHAN_ERR].ch_fd
+# define CH_IN	    ch_pfd[CHAN_IN].ch_fd
+#endif
+
+/* The per-fd info for a channel. */
+typedef struct {
+    sock_T	ch_fd;	    /* socket/stdin/stdout/stderr, -1 if not used */
+
+# if defined(UNIX) && !defined(HAVE_SELECT)
+    int		ch_poll_idx;	/* used by channel_poll_setup() */
+# endif
+
+#ifdef FEAT_GUI_X11
+    XtInputId	ch_inputHandler; /* Cookie for input */
+#endif
+#ifdef FEAT_GUI_GTK
+    gint	ch_inputHandler; /* Cookie for input */
+#endif
+#ifdef WIN32
+    int		ch_inputHandler; /* ret.value of WSAAsyncSelect() */
+#endif
+#ifdef FEAT_GUI_MACVIM
+    void	*ch_inputHandler; /* Cookie for input */
+#endif
+} chan_fd_T;
+
+struct channel_S {
+    channel_T	*ch_next;
+    channel_T	*ch_prev;
+
+    int		ch_id;		/* ID of the channel */
+
+    chan_fd_T	ch_pfd[4];	/* info for socket, out, err and in */
+
+    readq_T	ch_head;	/* dummy node, header for circular queue */
+
+    int		ch_error;	/* When TRUE an error was reported.  Avoids
+				 * giving pages full of error messages when
+				 * the other side has exited, only mention the
+				 * first error until the connection works
+				 * again. */
+
+    void	(*ch_close_cb)(void); /* callback for when channel is closed */
+
+    int		ch_block_id;	/* ID that channel_read_json_block() is
+				   waiting for */
+    char_u	*ch_callback;	/* function to call when a msg is not handled */
+    cbq_T	ch_cb_head;	/* dummy node for pre-request callbacks */
+
+    ch_mode_T	ch_mode;
+    jsonq_T	ch_json_head;	/* dummy node, header for circular queue */
+
+    int		ch_timeout;	/* request timeout in msec */
+
+    job_T	*ch_job;	/* Job that uses this channel; this does not
+				 * count as a reference to avoid a circular
+				 * reference. */
+
+    int		ch_refcount;	/* reference count */
+};
+
+
+/* structure used for explicit stack while garbage collecting hash tables */
+typedef struct ht_stack_S
+{
+    hashtab_T		*ht;
+    struct ht_stack_S	*prev;
+} ht_stack_T;
+
+/* structure used for explicit stack while garbage collecting lists */
+typedef struct list_stack_S
+{
+    list_T		*list;
+    struct list_stack_S	*prev;
+} list_stack_T;
 
 /* values for b_syn_spell: what to do with toplevel text */
 #define SYNSPL_DEFAULT	0	/* spell check if @Spell not defined */
@@ -1238,6 +1416,24 @@ typedef struct {
     long	match;		/* nr of times matched */
 } syn_time_T;
 #endif
+
+#ifdef FEAT_CRYPT
+/*
+ * Structure to hold the type of encryption and the state of encryption or
+ * decryption.
+ */
+typedef struct {
+    int	    method_nr;
+    void    *method_state;  /* method-specific state information */
+} cryptstate_T;
+
+/* values for method_nr */
+# define CRYPT_M_ZIP	0
+# define CRYPT_M_BF	1
+# define CRYPT_M_BF2	2
+# define CRYPT_M_COUNT	3 /* number of crypt methods */
+#endif
+
 
 /*
  * These are items normally related to a buffer.  But when using ":ownsyntax"
@@ -1309,10 +1505,15 @@ typedef struct {
     regprog_T	*b_cap_prog;	/* program for 'spellcapcheck' */
     char_u	*b_p_spf;	/* 'spellfile' */
     char_u	*b_p_spl;	/* 'spelllang' */
+# ifdef FEAT_MBYTE
+    int		b_cjk;		/* all CJK letters as OK */
+# endif
 #endif
 #if !defined(FEAT_SYN_HL) && !defined(FEAT_SPELL)
     int		dummy;
 #endif
+    char_u	b_syn_chartab[32];	/* syntax iskeyword option */
+    char_u	*b_syn_isk;		/* iskeyword option */
 } synblock_T;
 
 
@@ -1397,12 +1598,10 @@ struct file_buffer
 
     pos_T	b_namedm[NMARKS]; /* current named marks (mark.c) */
 
-#ifdef FEAT_VISUAL
     /* These variables are set when VIsual_active becomes FALSE */
     visualinfo_T b_visual;
-# ifdef FEAT_EVAL
+#ifdef FEAT_EVAL
     int		b_visual_mode_eval;  /* b_visual.vi_mode for visualmode() */
-# endif
 #endif
 
     pos_T	b_last_cursor;	/* cursor position when last unloading this
@@ -1440,6 +1639,7 @@ struct file_buffer
      * start and end of an operator, also used for '[ and ']
      */
     pos_T	b_op_start;
+    pos_T	b_op_start_orig;  /* used for Insstart_orig */
     pos_T	b_op_end;
 
 #ifdef FEAT_VIMINFO
@@ -1505,6 +1705,8 @@ struct file_buffer
 
     int		b_p_ai;		/* 'autoindent' */
     int		b_p_ai_nopaste;	/* b_p_ai saved for paste mode */
+    char_u	*b_p_bkc;	/* 'backupcopy' */
+    unsigned	b_bkc_flags;    /* flags for 'backupcopy' */
     int		b_p_ci;		/* 'copyindent' */
     int		b_p_bin;	/* 'binary' */
 #ifdef FEAT_MBYTE
@@ -1537,8 +1739,10 @@ struct file_buffer
     char_u	*b_p_ofu;	/* 'omnifunc' */
 #endif
     int		b_p_eol;	/* 'endofline' */
+    int		b_p_fixeol;	/* 'fixendofline' */
     int		b_p_et;		/* 'expandtab' */
     int		b_p_et_nobin;	/* b_p_et saved for binary mode */
+    int	        b_p_et_nopaste; /* b_p_et saved for paste mode */
 #ifdef FEAT_MBYTE
     char_u	*b_p_fenc;	/* 'fileencoding' */
 #endif
@@ -1623,18 +1827,63 @@ struct file_buffer
     char_u	*b_p_path;	/* 'path' local value */
     int		b_p_ar;		/* 'autoread' local value */
     char_u	*b_p_tags;	/* 'tags' local value */
+    char_u	*b_p_tc;	/* 'tagcase' local value */
+    unsigned	b_tc_flags;     /* flags for 'tagcase' */
 #ifdef FEAT_INS_EXPAND
     char_u	*b_p_dict;	/* 'dictionary' local value */
     char_u	*b_p_tsr;	/* 'thesaurus' local value */
 #endif
+    long	b_p_ul;		/* 'undolevels' local value */
 #ifdef FEAT_PERSISTENT_UNDO
     int		b_p_udf;	/* 'undofile' */
 #endif
 #ifdef FEAT_GUI_MACVIM
     int		b_p_mmta;	/* 'macmeta' local value */
 #endif
+#ifdef FEAT_LISP
+    char_u	*b_p_lw;	/* 'lispwords' local value */
+#endif
 
     /* end of buffer options */
+
+#ifdef FEAT_CINDENT
+    /* values set from b_p_cino */
+    int		b_ind_level;
+    int		b_ind_open_imag;
+    int		b_ind_no_brace;
+    int		b_ind_first_open;
+    int		b_ind_open_extra;
+    int		b_ind_close_extra;
+    int		b_ind_open_left_imag;
+    int		b_ind_jump_label;
+    int		b_ind_case;
+    int		b_ind_case_code;
+    int		b_ind_case_break;
+    int		b_ind_param;
+    int		b_ind_func_type;
+    int		b_ind_comment;
+    int		b_ind_in_comment;
+    int		b_ind_in_comment2;
+    int		b_ind_cpp_baseclass;
+    int		b_ind_continuation;
+    int		b_ind_unclosed;
+    int		b_ind_unclosed2;
+    int		b_ind_unclosed_noignore;
+    int		b_ind_unclosed_wrapped;
+    int		b_ind_unclosed_whiteok;
+    int		b_ind_matching_paren;
+    int		b_ind_paren_prev;
+    int		b_ind_maxparen;
+    int		b_ind_maxcomment;
+    int		b_ind_scopedecl;
+    int		b_ind_scopedecl_code;
+    int		b_ind_java;
+    int		b_ind_js;
+    int		b_ind_keep_case_label;
+    int		b_ind_hash_comment;
+    int		b_ind_cpp_namespace;
+    int		b_ind_if_for_while;
+#endif
 
     linenr_T	b_no_eol_lnum;	/* non-zero lnum when last line of next binary
 				 * write should not have an end-of-line */
@@ -1717,6 +1966,11 @@ struct file_buffer
 
 #ifdef FEAT_SIGNS
     signlist_T	*b_signlist;	/* list of signs to draw */
+# ifdef FEAT_NETBEANS_INTG
+    int		b_has_sign_column; /* Flag that is set when a first sign is
+				    * added and remains set until the end of
+				    * the netbeans session. */
+# endif
 #endif
 
 #ifdef FEAT_NETBEANS_INTG
@@ -1729,7 +1983,14 @@ struct file_buffer
     void        *b_odb_token;       /* NSAppleEventDescriptor (optional) */
     char_u      *b_odb_fname;       /* Custom file name (optional) */
 #endif
-};
+
+#ifdef FEAT_CRYPT
+    cryptstate_T *b_cryptstate;	/* Encryption state while reading or writing
+				 * the file. NULL when not using encryption. */
+#endif
+    int		b_mapped_ctrl_c; /* modes where CTRL-C is mapped */
+
+}; /* file_buffer */
 
 
 #ifdef FEAT_DIFF
@@ -1884,6 +2145,32 @@ typedef struct
 #endif
 } match_T;
 
+/* number of positions supported by matchaddpos() */
+#define MAXPOSMATCH 8
+
+/*
+ * Same as lpos_T, but with additional field len.
+ */
+typedef struct
+{
+    linenr_T	lnum;	/* line number */
+    colnr_T	col;	/* column number */
+    int		len;	/* length: 0 - to the end of line */
+} llpos_T;
+
+/*
+ * posmatch_T provides an array for storing match items for matchaddpos()
+ * function.
+ */
+typedef struct posmatch posmatch_T;
+struct posmatch
+{
+    llpos_T	pos[MAXPOSMATCH];	/* array of positions */
+    int		cur;			/* internal position counter */
+    linenr_T	toplnum;		/* top buffer line */
+    linenr_T	botlnum;		/* bottom buffer line */
+};
+
 /*
  * matchitem_T provides a linked list for storing match items for ":match" and
  * the match functions.
@@ -1897,7 +2184,11 @@ struct matchitem
     char_u	*pattern;   /* pattern to highlight */
     int		hlg_id;	    /* highlight group ID */
     regmmatch_T	match;	    /* regexp program for pattern */
+    posmatch_T	pos;	    /* position matches */
     match_T	hl;	    /* struct for doing the actual highlighting */
+#ifdef FEAT_CONCEAL
+    int		conceal_char; /* cchar for Conceal highlighting */
+#endif
 };
 
 /*
@@ -1935,9 +2226,8 @@ struct window_S
 				       time through cursupdate() to the
 				       current virtual column */
 
-#ifdef FEAT_VISUAL
     /*
-     * the next six are used to update the visual part
+     * the next seven are used to update the visual part
      */
     char	w_old_visual_mode;  /* last known VIsual_mode */
     linenr_T	w_old_cursor_lnum;  /* last known end of visual part */
@@ -1946,7 +2236,6 @@ struct window_S
     linenr_T	w_old_visual_lnum;  /* last known start of visual part */
     colnr_T	w_old_visual_col;   /* last known start of visual part */
     colnr_T	w_old_curswant;	    /* last known value of Curswant */
-#endif
 
     /*
      * "w_topline", "w_leftcol" and "w_skipcol" specify the offsets for
@@ -2121,6 +2410,11 @@ struct window_S
 #ifdef FEAT_SYN_HL
     int		*w_p_cc_cols;	    /* array of columns to highlight or NULL */
 #endif
+#ifdef FEAT_LINEBREAK
+    int		w_p_brimin;	    /* minimum width for breakindent */
+    int		w_p_brishift;	    /* additional shift for breakindent */
+    int		w_p_brisbr;	    /* sbr in 'briopt' */
+#endif
 
     /* transform a pointer to a "onebuf" option into a "allbuf" option */
 #define GLOBAL_WO(p)	((char *)p + sizeof(winopt_T))
@@ -2187,6 +2481,7 @@ struct window_S
 #ifdef FEAT_LINEBREAK
     linenr_T	w_nrwidth_line_count;	/* line count when ml_nrwidth_width
 					 * was computed. */
+    long	w_nuw_cached;		/* 'numberwidth' option cached */
     int		w_nrwidth_width;	/* nr of chars to print line count. */
 #endif
 
@@ -2248,10 +2543,8 @@ typedef struct oparg_S
 				   (inclusive) */
     int		empty;		/* op_start and op_end the same (only used by
 				   do_change()) */
-#ifdef FEAT_VISUAL
     int		is_VIsual;	/* operator on Visual area */
     int		block_mode;	/* current operator is Visual block mode */
-#endif
     colnr_T	start_vcol;	/* start col for block mode operator */
     colnr_T	end_vcol;	/* end col for block mode operator */
 #ifdef FEAT_AUTOCMD
@@ -2380,7 +2673,7 @@ struct VimMenu
     char_u	*actext;	    /* accelerator text (after TAB) */
     int		priority;	    /* Menu order priority */
 #ifdef FEAT_GUI
-    void	(*cb) __ARGS((vimmenu_T *));	    /* Call-back routine */
+    void	(*cb)(vimmenu_T *);	    /* Call-back routine */
 #endif
 #ifdef FEAT_TOOLBAR
     char_u	*iconfile;	    /* name of file for icon or NULL */
@@ -2555,3 +2848,18 @@ typedef struct {
   UINT32_T state[8];
   char_u   buffer[64];
 } context_sha256_T;
+
+/*
+ * Structure used for reading in json_decode().
+ */
+struct js_reader
+{
+    char_u	*js_buf;	/* text to be decoded */
+    char_u	*js_end;	/* NUL in js_buf */
+    int		js_used;	/* bytes used from js_buf */
+    int		(*js_fill)(struct js_reader *);
+				/* function to fill the buffer or NULL;
+                                 * return TRUE when the buffer was filled */
+    void	*js_cookie;	/* can be used by js_fill */
+};
+typedef struct js_reader js_read_T;

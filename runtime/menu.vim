@@ -2,7 +2,7 @@
 " You can also use this as a start for your own set of menus.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2013 May 17
+" Last Change:	2014 May 22
 
 " Note that ":an" (short for ":anoremenu") is often used to make a menu work
 " in all modes and avoid side effects from mappings defined by the user.
@@ -17,7 +17,7 @@ if !exists("did_install_default_menus")
 let did_install_default_menus = 1
 
 
-if (exists("v:lang") || &langmenu != "")
+if exists("v:lang") || &langmenu != ""
   " Try to find a menu translation file for the current language.
   if &langmenu != ""
     if &langmenu =~ "none"
@@ -206,7 +206,7 @@ inoremenu <script> <silent> 20.400 &Edit.&Select\ All<Tab>ggVG	<C-O>:call <SID>S
 cnoremenu <script> <silent> 20.400 &Edit.&Select\ All<Tab>ggVG	<C-U>call <SID>SelectAll()<CR>
 
 an 20.405	 &Edit.-SEP2-				<Nop>
-if has("win32") || has("win16") || has("gui_gtk") || has("gui_kde") || has("gui_motif")
+if has("win32")  || has("win16") || has("gui_gtk") || has("gui_kde") || has("gui_motif")
   an 20.410	 &Edit.&Find\.\.\.			:promptfind<CR>
   vunmenu	 &Edit.&Find\.\.\.
   vnoremenu <silent>	 &Edit.&Find\.\.\.		y:promptfind <C-R>=<SID>FixFText()<CR><CR>
@@ -530,6 +530,7 @@ if has("folding")
   an 40.340.110 &Tools.&Folding.&Enable/Disable\ folds<Tab>zi		zi
   an 40.340.120 &Tools.&Folding.&View\ Cursor\ Line<Tab>zv		zv
   an 40.340.120 &Tools.&Folding.Vie&w\ Cursor\ Line\ only<Tab>zMzx	zMzx
+  inoremenu 40.340.120 &Tools.&Folding.Vie&w\ Cursor\ Line\ only<Tab>zMzx  <C-O>zM<C-O>zx
   an 40.340.130 &Tools.&Folding.C&lose\ more\ folds<Tab>zm		zm
   an 40.340.140 &Tools.&Folding.&Close\ all\ folds<Tab>zM		zM
   an 40.340.150 &Tools.&Folding.O&pen\ more\ folds<Tab>zr		zr
@@ -945,6 +946,7 @@ cnoremenu <script> <silent> 1.100 PopUp.Select\ &All	<C-U>call <SID>SelectAll()<
 
 an 1.100 PopUp.-SEP3-			<Nop>
 nnoremenu <script> <silent> 1.110 PopUp.Reveal\ in\ File\ Browser	:<C-U>macaction revealInFileBrowser:<CR>
+nnoremenu <script> <silent> 1.120 PopUp.Change\ File\ Browser\ To\ Dir	:<C-U>macaction setParentDirectoryAsCWD:<CR>
 
 if has("spell")
   " Spell suggestions in the popup menu.  Note that this will slow down the

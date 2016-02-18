@@ -30,7 +30,7 @@ static int pum_col;			/* left column of pum */
 
 static int pum_do_redraw = FALSE;	/* do redraw anyway */
 
-static int pum_set_selected __ARGS((int n, int repeat));
+static int pum_set_selected(int n, int repeat);
 
 #define PUM_DEF_HEIGHT 10
 #define PUM_DEF_WIDTH  15
@@ -42,10 +42,10 @@ static int pum_set_selected __ARGS((int n, int repeat));
  * The menu appears above the screen line "row" or at "row" + "height" - 1.
  */
     void
-pum_display(array, size, selected)
-    pumitem_T	*array;
-    int		size;
-    int		selected;	/* index of initially selected item, none if
+pum_display(
+    pumitem_T	*array,
+    int		size,
+    int		selected)	/* index of initially selected item, none if
 				   out of range */
 {
     int		w;
@@ -263,7 +263,7 @@ redo:
  * Redraw the popup menu, using "pum_first" and "pum_selected".
  */
     void
-pum_redraw()
+pum_redraw(void)
 {
     int		row = pum_row;
     int		col;
@@ -281,6 +281,10 @@ pum_redraw()
     int		thumb_heigth = 1;
     int		round;
     int		n;
+
+    /* Never display more than we have */
+    if (pum_first > pum_size - pum_height)
+	pum_first = pum_size - pum_height;
 
     if (pum_scrollbar)
     {
@@ -483,9 +487,7 @@ pum_redraw()
  * must be recomputed.
  */
     static int
-pum_set_selected(n, repeat)
-    int	    n;
-    int	    repeat;
+pum_set_selected(int n, int repeat)
 {
     int	    resized = FALSE;
     int	    context = pum_height / 2;
@@ -563,7 +565,13 @@ pum_set_selected(n, repeat)
 	    g_do_tagpreview = 3;
 	    if (p_pvh > 0 && p_pvh < g_do_tagpreview)
 		g_do_tagpreview = p_pvh;
+	    ++RedrawingDisabled;
+	    /* Prevent undo sync here, if an autocommand syncs undo weird
+	     * things can happen to the undo tree. */
+	    ++no_u_sync;
 	    resized = prepare_tagpreview(FALSE);
+	    --no_u_sync;
+	    --RedrawingDisabled;
 	    g_do_tagpreview = 0;
 
 	    if (curwin->w_p_pvw)
@@ -637,6 +645,12 @@ pum_set_selected(n, repeat)
 
 		    if (curwin != curwin_save && win_valid(curwin_save))
 		    {
+			/* When the first completion is done and the preview
+			 * window is not resized, skip the preview window's
+			 * status line redrawing. */
+			if (ins_compl_active() && !resized)
+			    curwin->w_redr_status = FALSE;
+
 			/* Return cursor to where we were */
 			validate_cursor();
 			redraw_later(SOME_VALID);
@@ -647,7 +661,9 @@ pum_set_selected(n, repeat)
 			 * redraw. */
 			if (resized)
 			{
+			    ++no_u_sync;
 			    win_enter(curwin_save, TRUE);
+			    --no_u_sync;
 			    update_topline();
 			}
 
@@ -658,7 +674,11 @@ pum_set_selected(n, repeat)
 			pum_do_redraw = FALSE;
 
 			if (!resized && win_valid(curwin_save))
+			{
+			    ++no_u_sync;
 			    win_enter(curwin_save, TRUE);
+			    --no_u_sync;
+			}
 
 			/* May need to update the screen again when there are
 			 * autocommands involved. */
@@ -672,10 +692,6 @@ pum_set_selected(n, repeat)
 #endif
     }
 
-    /* Never display more than we have */
-    if (pum_first > pum_size - pum_height)
-	pum_first = pum_size - pum_height;
-
     if (!resized)
 	pum_redraw();
 
@@ -686,7 +702,7 @@ pum_set_selected(n, repeat)
  * Undisplay the popup menu (later).
  */
     void
-pum_undisplay()
+pum_undisplay(void)
 {
     pum_array = NULL;
     redraw_all_later(SOME_VALID);
@@ -701,7 +717,7 @@ pum_undisplay()
  * displayed item.
  */
     void
-pum_clear()
+pum_clear(void)
 {
     pum_first = 0;
 }
@@ -711,7 +727,7 @@ pum_clear()
  * Overruled when "pum_do_redraw" is set, used to redraw the status lines.
  */
     int
-pum_visible()
+pum_visible(void)
 {
     return !pum_do_redraw && pum_array != NULL;
 }
@@ -721,7 +737,7 @@ pum_visible()
  * Only valid when pum_visible() returns TRUE!
  */
     int
-pum_get_height()
+pum_get_height(void)
 {
     return pum_height;
 }

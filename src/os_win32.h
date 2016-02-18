@@ -49,9 +49,6 @@
 #ifndef HAVE_FCNTL_H
 # define HAVE_FCNTL_H
 #endif
-#ifndef HAVE_STDARG_H
-# define HAVE_STDARG_H
-#endif
 #define HAVE_QSORT
 #define HAVE_ST_MODE		/* have stat.st_mode */
 
@@ -68,7 +65,7 @@
 #endif
 
 #define USE_FNAME_CASE		/* adjust case of file names */
-#if !defined(FEAT_CLIPBOARD) && defined(FEAT_VISUAL) && defined(FEAT_MOUSE)
+#if !defined(FEAT_CLIPBOARD) && defined(FEAT_MOUSE)
 # define FEAT_CLIPBOARD		/* include clipboard support */
 #endif
 #if defined(__DATE__) && defined(__TIME__)
@@ -77,6 +74,8 @@
 #ifndef FEAT_GUI_W32		/* GUI works different */
 # define BREAKCHECK_SKIP    1	/* call mch_breakcheck() each time, it's fast */
 #endif
+
+#define HAVE_TOTAL_MEM
 
 #define HAVE_PUTENV		/* at least Bcc 5.2 and MSC have it */
 
@@ -128,6 +127,19 @@
 
 #ifndef DFLT_MAXMEMTOT
 # define DFLT_MAXMEMTOT	(5*1024)    /* use up to 5 Mbyte for Vim */
+#endif
+
+/*
+ * Reparse Point
+ */
+#ifndef FILE_ATTRIBUTE_REPARSE_POINT
+# define FILE_ATTRIBUTE_REPARSE_POINT	0x00000400
+#endif
+#ifndef IO_REPARSE_TAG_MOUNT_POINT
+# define IO_REPARSE_TAG_MOUNT_POINT	0xA0000003
+#endif
+#ifndef IO_REPARSE_TAG_SYMLINK
+# define IO_REPARSE_TAG_SYMLINK		0xA000000C
 #endif
 
 #if defined(_MSC_VER) || defined(__BORLANDC__)

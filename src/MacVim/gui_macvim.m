@@ -176,6 +176,20 @@ gui_macvim_after_fork_init()
     val = CFPreferencesGetAppIntegerValue((CFStringRef)MMRendererKey,
                                             kCFPreferencesCurrentApplication,
                                             &keyValid);
+    if (!keyValid) {
+        // If MMRendererKey is not valid in the defaults, it means MacVim uses
+        // the Core Text Renderer.
+        keyValid = YES;
+        val = MMRendererCoreText;
+    }
+    if (val != MMRendererDefault && val != MMRendererCoreText) {
+        // Migrate from the old value to the Core Text Renderer.
+        val = MMRendererCoreText;
+        CFPreferencesSetAppValue((CFStringRef)MMRendererKey,
+                                (CFPropertyListRef)[NSNumber numberWithInt:val],
+                                kCFPreferencesCurrentApplication);
+        CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication);
+    }
     if (keyValid) {
         ASLogInfo(@"Use renderer=%ld", val);
         use_gui_macvim_draw_string = (val != MMRendererCoreText);
@@ -1017,7 +1031,7 @@ gui_mch_set_font(GuiFont font)
 gui_macvim_font_with_name(char_u *name)
 {
     if (!name)
-        return (GuiFont)[[NSString alloc] initWithFormat:@"%@:%d",
+        return (GuiFont)[[NSString alloc] initWithFormat:@"%@:h%d",
                                         MMDefaultFontName, MMDefaultFontSize];
 
     NSString *fontName = [NSString stringWithVimString:name];
@@ -1055,7 +1069,7 @@ gui_macvim_font_with_name(char_u *name)
         // can load it.  Otherwise we ask NSFont if it can load it.
         if ([fontName isEqualToString:MMDefaultFontName]
                 || [NSFont fontWithName:fontName size:size])
-            return [[NSString alloc] initWithFormat:@"%@:%d", fontName, size];
+            return [[NSString alloc] initWithFormat:@"%@:h%d", fontName, size];
     }
 
     return NOFONT;
@@ -1783,6 +1797,11 @@ gui_macvim_set_antialias(int antialias)
     [[MMBackend sharedInstance] setAntialias:antialias];
 }
 
+    void
+gui_macvim_set_ligatures(int ligatures)
+{
+    [[MMBackend sharedInstance] setLigatures:ligatures];
+}
 
     void
 gui_macvim_wait_for_startup()
@@ -1806,6 +1825,15 @@ void gui_macvim_get_window_layout(int *count, int *layout)
     }
 }
 
+void *gui_macvim_new_autoreleasepool()
+{
+    return (void *)[[NSAutoreleasePool alloc] init];
+}
+
+void gui_macvim_release_autoreleasepool(void *pool)
+{
+    [(id)pool release];
+}
 
 // -- Client/Server ---------------------------------------------------------
 
@@ -2211,18 +2239,19 @@ static int vimModMaskToEventModifierFlags(int mods)
 
 
 
-// -- NetBeans Support ------------------------------------------------------
+// -- Channel Support ------------------------------------------------------
 
-#ifdef FEAT_NETBEANS_INTG
-
-/* Set NetBeans socket to CFRunLoop */
-    void
-gui_macvim_set_netbeans_socket(int socket)
+    void *
+gui_macvim_add_channel(channel_T *channel, int which)
 {
-    [[MMBackend sharedInstance] setNetbeansSocket:socket];
+    return [[MMBackend sharedInstance] addChannel:channel which:which];
 }
 
-#endif // FEAT_NETBEANS_INTG
+    void
+gui_macvim_remove_channel(void *cookie)
+{
+    [[MMBackend sharedInstance] removeChannel:cookie];
+}
 
 
 
@@ -2281,13 +2310,6 @@ gui_mch_destroy_sign(void *sign)
     [imgName release];
 }
 
-# ifdef FEAT_NETBEANS_INTG
-    void
-netbeans_draw_multisign_indicator(int row)
-{
-}
-# endif // FEAT_NETBEANS_INTG
-
 #endif // FEAT_SIGN_ICONS
 
 
@@ -2300,7 +2322,7 @@ netbeans_draw_multisign_indicator(int row)
 gui_mch_create_beval_area(target, mesg, mesgCB, clientData)
     void	*target;
     char_u	*mesg;
-    void	(*mesgCB)__ARGS((BalloonEval *, int));
+    void	(*mesgCB)(BalloonEval *, int);
     void	*clientData;
 {
     BalloonEval	*beval;
@@ -2350,3 +2372,9 @@ gui_mch_post_balloon(beval, mesg)
 }
 
 #endif // FEAT_BEVAL
+
+    void
+gui_macvim_set_blur(int radius)
+{
+    [[MMBackend sharedInstance] setBlurRadius:radius];
+}

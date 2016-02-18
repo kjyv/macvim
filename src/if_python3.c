@@ -97,6 +97,19 @@
 #define Py_ssize_t_fmt "n"
 #define Py_bytes_fmt "y"
 
+#define PyIntArgFunc	ssizeargfunc
+#define PyIntObjArgProc	ssizeobjargproc
+
+/*
+ * PySlice_GetIndicesEx(): first argument type changed from PySliceObject
+ * to PyObject in Python 3.2 or later.
+ */
+#if PY_VERSION_HEX >= 0x030200f0
+typedef PyObject PySliceObject_T;
+#else
+typedef PySliceObject PySliceObject_T;
+#endif
+
 #if defined(DYNAMIC_PYTHON3) || defined(PROTO)
 
 # ifndef WIN3264
@@ -291,8 +304,9 @@ static Py_ssize_t (*py3_PyTuple_Size)(PyObject *);
 static PyObject* (*py3_PyTuple_GetItem)(PyObject *, Py_ssize_t);
 static int (*py3_PyMapping_Check)(PyObject *);
 static PyObject* (*py3_PyMapping_Keys)(PyObject *);
-static int (*py3_PySlice_GetIndicesEx)(PyObject *r, Py_ssize_t length,
-		     Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step, Py_ssize_t *slicelength);
+static int (*py3_PySlice_GetIndicesEx)(PySliceObject_T *r, Py_ssize_t length,
+		     Py_ssize_t *start, Py_ssize_t *stop, Py_ssize_t *step,
+		     Py_ssize_t *slicelen);
 static PyObject* (*py3_PyErr_NoMemory)(void);
 static void (*py3_Py_Finalize)(void);
 static void (*py3_PyErr_SetString)(PyObject *, const char *);
@@ -302,7 +316,7 @@ static int (*py3_PyRun_SimpleString)(char *);
 static PyObject* (*py3_PyRun_String)(char *, int, PyObject *, PyObject *);
 static PyObject* (*py3_PyObject_GetAttrString)(PyObject *, const char *);
 static int (*py3_PyObject_HasAttrString)(PyObject *, const char *);
-static PyObject* (*py3_PyObject_SetAttrString)(PyObject *, const char *, PyObject *);
+static int (*py3_PyObject_SetAttrString)(PyObject *, const char *, PyObject *);
 static PyObject* (*py3_PyObject_CallFunctionObjArgs)(PyObject *, ...);
 static PyObject* (*py3__PyObject_CallFunction_SizeT)(PyObject *, char *, ...);
 static PyObject* (*py3_PyObject_Call)(PyObject *, PyObject *, PyObject *);
@@ -672,16 +686,16 @@ py3_runtime_link_init(char *libname, int verbose)
     int
 python3_enabled(int verbose)
 {
-    return py3_runtime_link_init(DYNAMIC_PYTHON3_DLL, verbose) == OK;
+    return py3_runtime_link_init((char *)p_py3dll, verbose) == OK;
 }
 
 /* Load the standard Python exceptions - don't import the symbols from the
  * DLL, as this can cause errors (importing data symbols is not reliable).
  */
-static void get_py3_exceptions __ARGS((void));
+static void get_py3_exceptions(void);
 
     static void
-get_py3_exceptions()
+get_py3_exceptions(void)
 {
     PyObject *exmod = PyImport_ImportModule("builtins");
     PyObject *exdict = PyModule_GetDict(exmod);
@@ -786,7 +800,7 @@ static PyObject *Py3Init_vim(void);
  */
 
     void
-python3_end()
+python3_end(void)
 {
     static int recurse = 0;
 
@@ -814,9 +828,9 @@ python3_end()
     --recurse;
 }
 
-#if (defined(DYNAMIC_PYTHON) && defined(FEAT_PYTHON)) || defined(PROTO)
+#if (defined(DYNAMIC_PYTHON3) && defined(DYNAMIC_PYTHON) && defined(FEAT_PYTHON) && defined(UNIX)) || defined(PROTO)
     int
-python3_loaded()
+python3_loaded(void)
 {
     return (hinstPy3 != 0);
 }
@@ -839,7 +853,10 @@ Python3_Init(void)
 
 
 #ifdef PYTHON3_HOME
-	Py_SetPythonHome(PYTHON3_HOME);
+# ifdef DYNAMIC_PYTHON3
+	if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
+# endif
+	    Py_SetPythonHome(PYTHON3_HOME);
 #endif
 
 	PyImport_AppendInittab("vim", Py3Init_vim);
@@ -1186,7 +1203,7 @@ BufferSubscript(PyObject *self, PyObject* idx)
 	if (CheckBuffer((BufferObject *) self))
 	    return NULL;
 
-	if (PySlice_GetIndicesEx((PyObject *)idx,
+	if (PySlice_GetIndicesEx((PySliceObject_T *)idx,
 	      (Py_ssize_t)((BufferObject *)(self))->buf->b_ml.ml_line_count,
 	      &start, &stop,
 	      &step, &slicelen) < 0)
@@ -1218,7 +1235,7 @@ BufferAsSubscript(PyObject *self, PyObject* idx, PyObject* val)
 	if (CheckBuffer((BufferObject *) self))
 	    return -1;
 
-	if (PySlice_GetIndicesEx((PyObject *)idx,
+	if (PySlice_GetIndicesEx((PySliceObject_T *)idx,
 	      (Py_ssize_t)((BufferObject *)(self))->buf->b_ml.ml_line_count,
 	      &start, &stop,
 	      &step, &slicelen) < 0)
@@ -1302,7 +1319,7 @@ RangeSubscript(PyObject *self, PyObject* idx)
     {
 	Py_ssize_t start, stop, step, slicelen;
 
-	if (PySlice_GetIndicesEx((PyObject *)idx,
+	if (PySlice_GetIndicesEx((PySliceObject_T *)idx,
 		((RangeObject *)(self))->end-((RangeObject *)(self))->start+1,
 		&start, &stop,
 		&step, &slicelen) < 0)
@@ -1329,7 +1346,7 @@ RangeAsSubscript(PyObject *self, PyObject *idx, PyObject *val)
     {
 	Py_ssize_t start, stop, step, slicelen;
 
-	if (PySlice_GetIndicesEx((PyObject *)idx,
+	if (PySlice_GetIndicesEx((PySliceObject_T *)idx,
 		((RangeObject *)(self))->end-((RangeObject *)(self))->start+1,
 		&start, &stop,
 		&step, &slicelen) < 0)
@@ -1477,76 +1494,6 @@ DictionarySetattro(PyObject *self, PyObject *nameobj, PyObject *val)
 
 /* List object - Definitions
  */
-
-static PySequenceMethods ListAsSeq = {
-    (lenfunc)		ListLength,	 /* sq_length,	  len(x)   */
-    (binaryfunc)	0,		 /* RangeConcat, sq_concat,  x+y   */
-    (ssizeargfunc)	0,		 /* RangeRepeat, sq_repeat,  x*n   */
-    (ssizeargfunc)	ListItem,	 /* sq_item,	  x[i]	   */
-    (void *)		0,		 /* was_sq_slice,     x[i:j]   */
-    (ssizeobjargproc)	ListAssItem,	 /* sq_as_item,  x[i]=v   */
-    (void *)		0,		 /* was_sq_ass_slice, x[i:j]=v */
-    0,					 /* sq_contains */
-    (binaryfunc)	ListConcatInPlace,/* sq_inplace_concat */
-    0,					 /* sq_inplace_repeat */
-};
-
-static PyObject *ListSubscript(PyObject *, PyObject *);
-static Py_ssize_t ListAsSubscript(PyObject *, PyObject *, PyObject *);
-
-static PyMappingMethods ListAsMapping = {
-    /* mp_length	*/ (lenfunc) ListLength,
-    /* mp_subscript     */ (binaryfunc) ListSubscript,
-    /* mp_ass_subscript */ (objobjargproc) ListAsSubscript,
-};
-
-    static PyObject *
-ListSubscript(PyObject *self, PyObject* idx)
-{
-    if (PyLong_Check(idx))
-    {
-	long _idx = PyLong_AsLong(idx);
-	return ListItem((ListObject *)(self), _idx);
-    }
-    else if (PySlice_Check(idx))
-    {
-	Py_ssize_t start, stop, step, slicelen;
-
-	if (PySlice_GetIndicesEx(idx, ListLength((ListObject *)(self)),
-				 &start, &stop, &step, &slicelen) < 0)
-	    return NULL;
-	return ListSlice((ListObject *)(self), start, stop);
-    }
-    else
-    {
-	RAISE_INVALID_INDEX_TYPE(idx);
-	return NULL;
-    }
-}
-
-    static Py_ssize_t
-ListAsSubscript(PyObject *self, PyObject *idx, PyObject *obj)
-{
-    if (PyLong_Check(idx))
-    {
-	long _idx = PyLong_AsLong(idx);
-	return ListAssItem((ListObject *)(self), _idx, obj);
-    }
-    else if (PySlice_Check(idx))
-    {
-	Py_ssize_t start, stop, step, slicelen;
-
-	if (PySlice_GetIndicesEx(idx, ListLength((ListObject *)(self)),
-				 &start, &stop, &step, &slicelen) < 0)
-	    return -1;
-	return ListAssSlice((ListObject *)(self), start, stop, obj);
-    }
-    else
-    {
-	RAISE_INVALID_INDEX_TYPE(idx);
-	return -1;
-    }
-}
 
     static PyObject *
 ListGetattro(PyObject *self, PyObject *nameobj)
@@ -1702,11 +1649,18 @@ do_py3eval (char_u *str, typval_T *rettv)
 	    rettv->v_type = VAR_NUMBER;
 	    rettv->vval.v_number = 0;
 	    break;
+	case VAR_NUMBER:
+	case VAR_STRING:
+	case VAR_FLOAT:
+	case VAR_SPECIAL:
+	case VAR_JOB:
+	case VAR_CHANNEL:
+	    break;
     }
 }
 
-    void
+    int
 set_ref_in_python3 (int copyID)
 {
-    set_ref_in_py(copyID);
+    return set_ref_in_py(copyID);
 }

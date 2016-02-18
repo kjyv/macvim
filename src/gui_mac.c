@@ -1068,11 +1068,7 @@ HandleODocAE(const AppleEvent *theAEvent, AppleEvent *theReply, long refCon)
     }
  */
 
-
-#ifdef FEAT_VISUAL
     reset_VIsual();
-#endif
-
     fnames = new_fnames_from_AEDesc(&theList, &numFiles, &error);
 
     if (error)
@@ -1142,7 +1138,7 @@ HandleODocAE(const AppleEvent *theAEvent, AppleEvent *theReply, long refCon)
 
     /* Update the screen display */
     update_screen(NOT_VALID);
-#ifdef FEAT_VISUAL
+
     /* Select the text if possible */
     if (gotPosition)
     {
@@ -1160,7 +1156,7 @@ HandleODocAE(const AppleEvent *theAEvent, AppleEvent *theReply, long refCon)
 	    VIsual.col = 0;
 	}
     }
-#endif
+
     setcursor();
     out_flush();
 
@@ -2611,8 +2607,7 @@ gui_mch_mousehide(int hide)
  * the menu that we should display
  */
     void
-gui_mac_handle_contextual_menu(event)
-    EventRecord *event;
+gui_mac_handle_contextual_menu(EventRecord *event)
 {
 /*
  *  Clone PopUp to use menu
@@ -3701,8 +3696,7 @@ gui_mch_set_font(GuiFont font)
  * If a font is not going to be used, free its structure.
  */
     void
-gui_mch_free_font(font)
-    GuiFont	font;
+gui_mch_free_font(GuiFont font)
 {
     /*
      * Free font when "font" is not 0.
@@ -6823,7 +6817,8 @@ initialise_tabline(void)
 
     // create tabline popup menu required by vim docs (see :he tabline-menu)
     CreateNewMenu(kTabContextMenuId, 0, &contextMenu);
-    AppendMenuItemTextWithCFString(contextMenu, CFSTR("Close"), 0,
+    if (first_tabpage->tp_next != NULL)
+	AppendMenuItemTextWithCFString(contextMenu, CFSTR("Close Tab"), 0,
 						    TABLINE_MENU_CLOSE, NULL);
     AppendMenuItemTextWithCFString(contextMenu, CFSTR("New Tab"), 0,
 						      TABLINE_MENU_NEW, NULL);
@@ -6900,8 +6895,7 @@ gui_mch_update_tabline(void)
  * Set the current tab to "nr".  First tab is 1.
  */
     void
-gui_mch_set_curtab(nr)
-    int		nr;
+gui_mch_set_curtab(int nr)
 {
     DataBrowserItemID item = nr;
     SetDataBrowserSelectedItems(dataBrowser, 1, &item, kDataBrowserItemsAssign);

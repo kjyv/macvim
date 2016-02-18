@@ -19,6 +19,7 @@
 @class MMVimView;
 @class MMFileBrowserController;
 
+
 @interface MMWindowController : NSWindowController
 #if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     // 10.6 has turned delegate messages into formal protocols
@@ -33,11 +34,12 @@
     NSView              *sidebarView;
     BOOL                setupDone;
     BOOL                windowPresented;
-    BOOL                shouldPlaceVimView;
+    BOOL                shouldResizeVimView;
     BOOL                shouldResizeWindow;
     BOOL                shouldRestoreUserTopLeft;
     BOOL                shouldMaximizeWindow;
     int                 updateToolbarFlag;
+    BOOL                keepOnScreen;
     NSString            *windowAutosaveKey;
     BOOL                fullScreenEnabled;
     MMFullScreenWindow  *fullScreenWindow;
@@ -53,6 +55,8 @@
     BOOL                vimTaskSelectedTab;
     MMFileBrowserController *fileBrowserController;
     NSToolbar           *toolbar;
+    BOOL                resizingDueToMove;
+    int                 blurRadius;
 }
 
 - (id)initWithVimController:(MMVimController *)controller;
@@ -63,10 +67,9 @@
 - (void)cleanup;
 - (void)openWindow;
 - (BOOL)presentWindow:(id)unused;
-- (void)setTextDimensionsWithRows:(int)rows
-                          columns:(int)cols
-                           isLive:(BOOL)live
-                          isReply:(BOOL)reply;
+- (void)moveWindowAcrossScreens:(NSPoint)origin;
+- (void)setTextDimensionsWithRows:(int)rows columns:(int)cols isLive:(BOOL)live
+                     keepOnScreen:(BOOL)onScreen;
 - (void)zoomWithRows:(int)rows columns:(int)cols state:(int)state;
 - (void)setTitle:(NSString *)title;
 - (void)setDocumentFilename:(NSString *)filename;
@@ -87,6 +90,8 @@
 - (void)adjustLinespace:(int)linespace;
 - (void)liveResizeWillStart;
 - (void)liveResizeDidEnd;
+
+- (void)setBlurRadius:(int)radius;
 
 - (void)enterFullScreen:(int)fuoptions backgroundColor:(NSColor *)back;
 - (void)leaveFullScreen;
@@ -120,6 +125,7 @@
 - (IBAction)toggleFileBrowser:(id)sender;
 - (IBAction)selectInFileBrowser:(id)sender;
 - (IBAction)revealInFileBrowser:(id)sender;
+- (IBAction)setParentDirectoryAsCWD:(id)sender;
 - (IBAction)sidebarEdgePreferenceChanged:(id)sender;
 
 @end

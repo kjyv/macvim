@@ -10,7 +10,7 @@ Test for commands that close windows and/or buffers:
 :edit
 
 STARTTEST
-:so tiny.vim
+:so small.vim
 GA 1:$w! Xtest1
 $r2:$w! Xtest2
 $r3:$w! Xtest3
@@ -62,6 +62,32 @@ A 3:close
 :" test ":close!" does hide when 'hidden' not set in modified buffer;
 :" write "testtext 1"
 A 3:close!
+:w >>test.out
+:set nohidden
+:" test ":all!" hides changed buffer; write "testtext 2 2 2"
+:sp Xtest4
+GA 4:all!
+:1wincmd w
+:w >>test.out
+:"
+:" test ":q!" and hidden buffer.
+:bw! Xtest1 Xtest2 Xtest3 Xtest4
+:sp Xtest1
+:wincmd w
+:bw!
+:set modified
+:bot sp Xtest2
+:set modified
+:bot sp Xtest3
+:set modified
+:wincmd t
+:hide
+:q!
+:w >>test.out
+:q!
+:w >>test.out
+:q!
+:call append(line('$'), "Oh, Not finished yet.")
 :w >>test.out
 :qa!
 ENDTEST

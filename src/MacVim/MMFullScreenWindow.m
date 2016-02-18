@@ -61,7 +61,7 @@ enum {
     // you can't change the style of an existing window in cocoa. create a new
     // window and move the MMTextView into it.
     // (another way would be to make the existing window large enough that the
-    // title bar is off screen. but that doesn't work with multiple screens).  
+    // title bar is off screen. but that doesn't work with multiple screens).
     self = [super initWithContentRect:[screen frame]
                             styleMask:NSBorderlessWindowMask
                               backing:NSBackingStoreBuffered
@@ -137,6 +137,15 @@ enum {
     //oldTabBarStyle = [[view tabBarControl] styleName];
     //[[view tabBarControl] setStyleNamed:@"Unified"];
 
+    /*NSString *style;
+#if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10
+    style = @"Yosemite";
+#else
+    style = @"Unified";
+#endif
+    [[view tabBarControl] setStyleNamed:style];
+    */
+    
     // add text view
     oldPosition = [view frame].origin;
 
@@ -169,23 +178,19 @@ enum {
     // dimensions when exiting full-screen.
     startFuFlags = options;
 
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     // HACK! Put window on all Spaces to avoid Spaces (available on OS X 10.5
     // and later) from moving the full-screen window to a separate Space from
     // the one the decorated window is occupying.  The collection behavior is
     // restored further down.
     NSWindowCollectionBehavior wcb = [self collectionBehavior];
     [self setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces];
-#endif
 
     // make us visible and target invisible
     [target orderOut:self];
     [self makeKeyAndOrderFront:self];
 
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     // Restore collection behavior (see hack above).
     [self setCollectionBehavior:wcb];
-#endif
 
     // fade back in
     if (didBlend) {
@@ -261,7 +266,6 @@ enum {
     // button on the tabline steals the first responder status.
     [target setInitialFirstResponder:[view textView]];
 
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     // HACK! Put decorated window on all Spaces (available on OS X 10.5 and
     // later) so that the decorated window stays on the same Space as the full
     // screen window (they may occupy different Spaces e.g. if the full-screen
@@ -269,7 +273,7 @@ enum {
     // restored further down.
     NSWindowCollectionBehavior wcb = [target collectionBehavior];
     [target setCollectionBehavior:NSWindowCollectionBehaviorCanJoinAllSpaces];
-#endif
+
 #if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7)
     // HACK! On Mac OS X 10.7 windows animate when makeKeyAndOrderFront: is
     // called.  This is distracting here, so disable the animation and restore
@@ -288,10 +292,9 @@ enum {
     if (NSWindowAnimationBehaviorNone != a)
         [target setAnimationBehavior:a];
 #endif
-#if (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
+
     // Restore collection behavior (see hack above).
     [target setCollectionBehavior:wcb];
-#endif
 
     // ...but we don't want a focus gained message either, so don't set this
     // sooner
@@ -324,6 +327,42 @@ enum {
     return YES;
 }
 
+- (void)applicationDidChangeScreenParameters:(NSNotification *)notification
+{
+    if (state != InFullScreen)
+        return;
+
+    // This notification is sent when screen resolution may have changed (e.g.
+    // due to a monitor being unplugged or the resolution being changed
+    // manually) but it also seems to get called when the Dock is
+    // hidden/displayed.
+    ASLogDebug(@"Screen unplugged / resolution changed");
+
+    NSScreen *screen = [target screen];
+    if (!screen) {
+        // Paranoia: if window we originally used for full-screen is gone, try
+        // screen window is on now, and failing that (not sure this can happen)
+        // use main screen.
+        screen = [self screen];
+        if (!screen)
+            screen = [NSScreen mainScreen];
+    }
+
+    // Ensure the full-screen window is still covering the entire screen and
+    // then resize view according to 'fuopt'.
+    [self setFrame:[screen frame] display:NO];
+    [self resizeVimView];
+}
+
+- (CGFloat) viewOffset {
+    CGFloat menuBarHeight = 0;
+    if([self screen] != [[NSScreen screens] objectAtIndex:0]) {
+        // Screens other than the primary screen will not hide their menu bar, adjust the visible view down by the menu height
+        menuBarHeight = [[[NSApplication sharedApplication] mainMenu] menuBarHeight]-1;
+    }
+    return menuBarHeight;
+}
+
 - (void)centerView
 {
     NSRect outer = [self frame], inner = [view frame];
@@ -332,7 +371,7 @@ enum {
     // rendering issues may arise (screen looks blurry, each redraw clears the
     // entire window, etc.).
     NSPoint origin = { floor((outer.size.width - inner.size.width)/2),
-                       floor((outer.size.height - inner.size.height)/2) };
+                       floor((outer.size.height - inner.size.height)/2 - [self viewOffset]/2) };
 
     [view setFrameOrigin:origin];
 }
@@ -391,6 +430,8 @@ enum {
     // size since it compensates for menu and dock.
     int maxRows, maxColumns;
     NSSize size = [[self screen] frame].size;
+    size.height -= [self viewOffset];
+    
     [view constrainRows:&maxRows columns:&maxColumns toSize:size];
 
     // Compute current fu size
