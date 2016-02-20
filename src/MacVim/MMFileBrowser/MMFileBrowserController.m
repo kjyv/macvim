@@ -24,7 +24,9 @@
 @end
 
 
-@interface MMFileBrowserController ()
+@interface MMFileBrowserController () {
+  MMFileBrowserFSItem* selectedBufferItem;
+}
 - (void)pwdChanged:(NSNotification *)notification;
 - (void)changeWorkingDirectory:(NSString *)path;
 - (NSArray *)selectedItems;
@@ -48,13 +50,18 @@
   if ((self = [super initWithNibName:nil bundle:nil])) {
     windowController = controller;
     rootItem = nil;
+    opennedFiles = [[NSMutableSet alloc] init];
     fsEventsStream = NULL;
     userHasChangedSelection = NO;
     viewLoaded = NO;
+    selectedBufferItem = nil;
   }
   return self;
 }
-
+- (void)reloadTheme{
+  [fileBrowser display];
+  [pathControl display];
+}
 - (void)loadView {
   fileBrowser = [[MMFileBrowser alloc] initWithFrame:NSZeroRect];
   [fileBrowser setFocusRingType:NSFocusRingTypeNone];
@@ -75,10 +82,9 @@
   [fileBrowser setDraggingSourceOperationMask:NSDragOperationCopy|NSDragOperationLink forLocal:NO];
   [fileBrowser registerForDraggedTypes:[NSArray arrayWithObjects:DRAG_MOVE_FILES, NSFilenamesPboardType, nil]];
 
-  pathControl = [[NSPathControl alloc] initWithFrame:NSMakeRect(0, 0, 0, 20)];
+  pathControl = [[MMPathControl alloc] initWithFrame:NSMakeRect(0, 0, 0, 20)];
   [pathControl setRefusesFirstResponder:YES];
   [pathControl setAutoresizingMask:NSViewWidthSizable];
-  [pathControl setBackgroundColor:[NSColor whiteColor]];
   [pathControl setPathStyle:NSPathStylePopUp];
   [pathControl setFont:[NSFont fontWithName:[[pathControl font] fontName] size:12]];
   [pathControl setTarget:self];
@@ -170,6 +176,10 @@
   [self selectInBrowserByExpandingItems:NO];
 }
 
+- (void)closeInBrowser {
+  if (selectedBufferItem != nil) [opennedFiles removeObject:selectedBufferItem];
+}
+
 - (void)selectInBrowserByExpandingItems {
   [self selectInBrowserByExpandingItems:YES];
 }
@@ -183,7 +193,10 @@
     MMFileBrowserFSItem *item = [rootItem itemAtPath:fn];
     // always select file if `expand' is `YES', otherwise only if its parent is expanded
     if (expand || item.parent == rootItem || [fileBrowser isItemExpanded:item.parent]) {
+      selectedBufferItem = item;
+      [opennedFiles addObject:item];
       [fileBrowser selectItem:item];
+      [fileBrowser reloadData];
     } else {
       [fileBrowser selectRowIndexes:nil byExtendingSelection:NO];
     }
@@ -436,6 +449,7 @@
 
 - (void)outlineView:(NSOutlineView *)outlineView willDisplayCell:(MMFileBrowserCell *)cell forTableColumn:(NSTableColumn *)tableColumn item:(id)item {
   cell.image = [item icon];
+  cell.isOpen = [opennedFiles containsObject:item];
 }
 
 - (BOOL)outlineView:(NSOutlineView *)outlineView

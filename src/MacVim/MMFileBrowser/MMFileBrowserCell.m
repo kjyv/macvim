@@ -48,6 +48,7 @@
 
 #import "MMFileBrowserCell.h"
 #import <AppKit/NSCell.h>
+#import "Miscellaneous.h"
 
 @implementation MMFileBrowserCell
 
@@ -71,6 +72,7 @@
 }
 
 @synthesize image;
+@synthesize isOpen;
 
 - (NSRect)imageRectForBounds:(NSRect)cellFrame {
     NSRect result;
@@ -111,19 +113,50 @@
     [super selectWithFrame: textFrame inView: controlView editor:textObj delegate:anObject start:selStart length:selLength];
 }
 
+- (NSColor *)highlightColorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView{
+  return nil;
+}
+
+- (NSBackgroundStyle)interiorBackgroundStyle {
+  return NSBackgroundStyleLight;
+}
+
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
+
+    if (self.isOpen) {
+        NSRect stateFrame;
+        NSDivideRect(cellFrame, &stateFrame, &cellFrame, cellFrame.size.height, NSMaxXEdge);
+        stateFrame = NSInsetRect(stateFrame, 2, 2);
+        NSBezierPath* thePath = [NSBezierPath bezierPath];
+        [thePath appendBezierPathWithOvalInRect:NSOffsetRect(stateFrame, 0, 0)];
+        [[NSColor grayColor] set];
+        [thePath fill];
+
+        [self setFont:[NSFont boldSystemFontOfSize:0]];
+    } else {
+        [self setFont:[NSFont systemFontOfSize:0]];
+    }
+
     if (image != nil) {
         NSRect imageFrame;
         NSSize imageSize = [image size];
         NSDivideRect(cellFrame, &imageFrame, &cellFrame, 3 + imageSize.width, NSMinXEdge);
         if ([self drawsBackground]) {
             [[self backgroundColor] set];
-            NSRectFill(imageFrame);
+             NSRectFill(imageFrame);
         }
         imageFrame.origin.x += 3;
         [image setFlipped:[controlView isFlipped]];
         [image drawAtPoint:imageFrame.origin fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
     }
+
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
+      if (![self isHighlighted]) [super setTextColor:[NSColor lightGrayColor]];
+      else [super setTextColor:[NSColor blackColor]];
+    } else {
+      [super setTextColor:[NSColor blackColor]];
+    };
+
     [super drawWithFrame:cellFrame inView:controlView];
 }
 

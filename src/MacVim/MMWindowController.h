@@ -124,6 +124,7 @@
 - (IBAction)closeFileBrowser:(id)sender;
 - (IBAction)toggleFileBrowser:(id)sender;
 - (IBAction)selectInFileBrowser:(id)sender;
+- (IBAction)closeInFileBroswer:(id)sender;
 - (IBAction)revealInFileBrowser:(id)sender;
 - (IBAction)setParentDirectoryAsCWD:(id)sender;
 - (IBAction)sidebarEdgePreferenceChanged:(id)sender;

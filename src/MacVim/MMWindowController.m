@@ -1503,6 +1503,11 @@
     [fileBrowserController selectInBrowser];
 }
 
+- (IBAction)closeInFileBrowser:(id)sender
+{
+  [fileBrowserController closeInBrowser];
+}
+
 - (IBAction)revealInFileBrowser:(id)sender
 {
     [fileBrowserController selectInBrowserByExpandingItems];
@@ -1523,6 +1528,7 @@
                                             boolForKey:MMSidebarOnLeftEdgeKey];
     [self setSidebarView:sidebarView leftEdge:leftEdge];
     //[vimView placeViews];
+  [fileBrowserController reloadTheme];
     [vimController sendMessage:ForceRedrawMsgID data:nil];
 }
 
