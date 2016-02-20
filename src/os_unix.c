@@ -5059,13 +5059,15 @@ error:
 
 #if defined(FEAT_JOB) || defined(PROTO)
     void
-mch_start_job(char **argv, job_T *job)
+mch_start_job(char **argv, job_T *job, jobopt_T *options)
 {
     pid_t	pid;
     int		fd_in[2];	/* for stdin */
     int		fd_out[2];	/* for stdout */
     int		fd_err[2];	/* for stderr */
+# ifdef FEAT_CHANNEL
     channel_T	*channel = NULL;
+#endif
 
     /* default is to fail */
     job->jv_status = JOB_FAILED;
@@ -5073,6 +5075,8 @@ mch_start_job(char **argv, job_T *job)
     fd_out[0] = -1;
     fd_err[0] = -1;
 
+    /* TODO: without the channel feature connect the child to /dev/null? */
+# ifdef FEAT_CHANNEL
     /* Open pipes for stdin, stdout, stderr. */
     if ((pipe(fd_in) < 0) || (pipe(fd_out) < 0) ||(pipe(fd_err) < 0))
 	goto failed;
@@ -5080,6 +5084,7 @@ mch_start_job(char **argv, job_T *job)
     channel = add_channel();
     if (channel == NULL)
 	goto failed;
+# endif
 
     pid = fork();	/* maybe we should use vfork() */
     if (pid  == -1)
@@ -5102,6 +5107,8 @@ mch_start_job(char **argv, job_T *job)
 
 	set_child_environment();
 
+	/* TODO: re-enable this when pipes connect without a channel */
+# ifdef FEAT_CHANNEL
 	/* set up stdin for the child */
 	close(fd_in[1]);
 	close(0);
@@ -5119,6 +5126,7 @@ mch_start_job(char **argv, job_T *job)
 	close(2);
 	ignored = dup(fd_err[1]);
 	close(fd_err[1]);
+# endif
 
 	/* See above for type of argv. */
 	execvp(argv[0], argv);
@@ -5130,23 +5138,30 @@ mch_start_job(char **argv, job_T *job)
     /* parent */
     job->jv_pid = pid;
     job->jv_status = JOB_STARTED;
+# ifdef FEAT_CHANNEL
     job->jv_channel = channel;
+# endif
 
     /* child stdin, stdout and stderr */
     close(fd_in[0]);
     close(fd_out[1]);
     close(fd_err[1]);
+# ifdef FEAT_CHANNEL
     channel_set_pipes(channel, fd_in[1], fd_out[0], fd_err[0]);
     channel_set_job(channel, job);
-#ifdef FEAT_GUI
+    channel_set_options(channel, options);
+#  ifdef FEAT_GUI
     channel_gui_register(channel);
-#endif
+#  endif
+# endif
 
     return;
 
 failed:
+# ifdef FEAT_CHANNEL
     if (channel != NULL)
 	channel_free(channel);
+# endif
     if (fd_in[0] >= 0)
     {
 	close(fd_in[0]);
@@ -5352,11 +5367,12 @@ WaitForChar(long msec)
 #if defined(__BEOS__)
     int
 #else
-    static  int
+    static int
 #endif
 RealWaitForChar(int fd, long msec, int *check_for_gpm UNUSED)
 {
     int		ret;
+    int		result;
 #if defined(FEAT_XCLIPBOARD) || defined(USE_XSMP) || defined(FEAT_MZSCHEME)
     static int	busy = FALSE;
 
@@ -5473,6 +5489,9 @@ RealWaitForChar(int fd, long msec, int *check_for_gpm UNUSED)
 #endif
 
 	ret = poll(fds, nfd, towait);
+
+	result = ret > 0 && (fds[0].revents & POLLIN);
+
 # ifdef FEAT_MZSCHEME
 	if (ret == 0 && mzquantum_used)
 	    /* MzThreads scheduling is required and timeout occurred */
@@ -5620,6 +5639,10 @@ select_eintr:
 # endif
 
 	ret = select(maxfd + 1, &rfds, NULL, &efds, tvp);
+	result = ret > 0 && FD_ISSET(fd, &rfds);
+	if (result)
+	    --ret;
+
 # ifdef EINTR
 	if (ret == -1 && errno == EINTR)
 	{
@@ -5740,7 +5763,7 @@ select_eintr:
 #endif
     }
 
-    return (ret > 0);
+    return result;
 }
 
 #ifndef NO_EXPANDPATH
