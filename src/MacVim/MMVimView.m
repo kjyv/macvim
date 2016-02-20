@@ -405,7 +405,7 @@ enum {
                     constrained[1], constrained[0]]];
         }
     } else {
-        [vimController sendMessage:ForceRedrawMsgID data:nil];
+        //[vimController sendMessage:ForceRedrawMsgID data:nil];
     }
 
     // Must make sure scrollbars are in place or they might not cover the

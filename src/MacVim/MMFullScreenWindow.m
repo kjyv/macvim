@@ -135,7 +135,6 @@ enum {
     [[target windowController] setWindow:self];
 
     //oldTabBarStyle = [[view tabBarControl] styleName];
-    //[[view tabBarControl] setStyleNamed:@"Unified"];
 
     /*NSString *style;
 #if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10

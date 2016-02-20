@@ -753,7 +753,6 @@
                 shouldResizeWindow = NO;
             }
         }
-
         [vimView placeViews];
         shouldResizeVimView = NO;
         //keepOnScreen = NO;
