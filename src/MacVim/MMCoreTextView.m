@@ -580,6 +580,22 @@ defaultAdvanceForFont(NSFont *font)
 - (void)setFrameSize:(NSSize)size
 {
     [super setFrameSize:size];
+    
+    // A change in size has required the view to be invalidated.
+    if ([self inLiveResize])
+    {
+        NSRect rects[4];
+        NSInteger count;
+        [self getRectsExposedDuringLiveResize:rects count:&count];
+        while (count-- > 0)
+        {
+            [self setNeedsDisplayInRect:rects[count]];
+        }
+    }
+    else
+    {
+        [self setNeedsDisplay:YES];
+    }
 }
 
 - (BOOL)preservesContentDuringLiveResize
@@ -591,10 +607,11 @@ defaultAdvanceForFont(NSFont *font)
 
 - (void)drawRect:(NSRect)rect
 {
-    //ASLogTmp(@"count=%d  live=%d", [drawData count], [self inLiveResize]);
-#if 0
-    if ([self inLiveResize] &&
-            !NSIsEmptyRect([self rectPreservedDuringLiveResize])) {
+ 
+    NSGraphicsContext *context = [NSGraphicsContext currentContext];
+    [context setShouldAntialias:antialias];
+    
+    if ([self inLiveResize]) {
         // Clear areas exposed during live resize.  Note that "live resize"
         // happens when a user drags something to resize the view.  This
         // "something" can for example be the window or a split view.  However,
@@ -610,105 +627,30 @@ defaultAdvanceForFont(NSFont *font)
             NSRectFill(rects[i]);
         }
     }
-#endif
-
-    NSRect frame = [self frame];
-    NSPoint lowerLeft  = frame.origin;
-    NSPoint upperRight = { NSMaxX(frame), NSMaxY(frame) };
-
+    
+    //When not in live resize, we're finished and can draw a full image
     if ([drawData count] > 0) {
-        // Remember bounds of view that has supposedly been drawn to
-        lastLowerLeft  = [self convertToScreen:lowerLeft];
-        lastUpperRight = [self convertToScreen:upperRight];
-
-        NSGraphicsContext *context = [NSGraphicsContext currentContext];
-        [context setShouldAntialias:antialias];
-
         id data;
         NSEnumerator *e = [drawData objectEnumerator];
         while ((data = [e nextObject]))
             [self batchDrawData:data];
 
-        [drawData removeAllObjects];
+        if(![self inLiveResize]){
+            [drawData removeAllObjects];
+        }
         return;
     }
-
-    // If view has increased in size from what it was when we last drew to it,
-    // then we may need to clear parts of it.
-    // If we always clear then there will be redraw issues when the toolbar is
-    // toggled due the animation of the toolbar.
-    NSPoint ll = [self convertToScreen:lowerLeft];
-    NSPoint ur = [self convertToScreen:upperRight];
-    if (ur.x - ll.x <= lastUpperRight.x - lastLowerLeft.x
-            && ur.y - ll.y <= lastUpperRight.y - lastLowerLeft.y)
-        return;
-
-#if 1
-    if ([self inLiveResize]) {
-        // Some parts of the view may have been exposed but we have no data to
-        // draw, so clear the exposed areas to avoid ugliness.  Without this
-        // clearing the view will not look right after dragging the split view
-        // divider.
-        NSPoint ll = [self convertToScreen:lowerLeft];
-        NSPoint ur = [self convertToScreen:upperRight];
-
-        [defaultBackgroundColor set];
-
-        CGFloat h = frame.size.height;
-        if (h > 0) {
-            CGFloat w = lastLowerLeft.x - ll.x;
-            if (w > 0) {
-                NSRect r = { lowerLeft, { w, h }};
-                NSRectFill(r);
-            } else {
-                // The last painted left side has been painted over
-                lastLowerLeft.x -= w;
-            }
-
-            w = ur.x - lastUpperRight.x;
-            if (w > 0) {
-                NSRect r = { { upperRight.x - w, lowerLeft.y }, { w, h } };
-                NSRectFill(r);
-            } else {
-                // The last painted right side has been painted over
-                lastUpperRight.x += w;
-            }
-        }
-
-        CGFloat w = frame.size.width;
-        if (w > 0) {
-            h = lastLowerLeft.y - ll.y;
-            if (h > 0) {
-                NSRect r = { lowerLeft, { w, h } };
-                NSRectFill(r);
-            } else {
-                // The last painted bottom has been painted over
-                lastLowerLeft.y -= h;
-            }
-
-            h = ur.y - lastUpperRight.y;
-            if (h > 0) {
-                NSRect r = { { lowerLeft.x, upperRight.y - h }, { w, h } };
-                NSRectFill(r);
-            } else {
-                // The last painted top has been painted over
-                lastUpperRight.y += h;
-            }
-        }
-    } else {
-        // The view was probably resized as a result of the window changing
-        // size (maybe the user zoomed the window).  As a precaution we clear
-        // everything.
-        // Without this, the window flashes annoyingly after a zoom.
-        [defaultBackgroundColor set];
-        NSRectFill(rect);
-    }
-#endif
 }
 
 - (void)performBatchDrawWithData:(NSData *)data
 {
     [drawData addObject:data];
+    [self setNeedsDisplay:YES];
+    
+    // NOTE: During resizing, Cocoa only sends draw messages before Vim's rows
+    // and columns are changed (due to ipc delays). Force a redraw here.
+    if ([self inLiveResize])
+        [self display];
 }
 
 - (void)batchDrawNow
