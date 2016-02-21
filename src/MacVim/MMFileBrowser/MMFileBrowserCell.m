@@ -72,7 +72,6 @@
 }
 
 @synthesize image;
-@synthesize isOpen;
 
 - (NSRect)imageRectForBounds:(NSRect)cellFrame {
     NSRect result;
@@ -122,21 +121,6 @@
 }
 
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
-
-    if (self.isOpen) {
-        NSRect stateFrame;
-        NSDivideRect(cellFrame, &stateFrame, &cellFrame, cellFrame.size.height, NSMaxXEdge);
-        stateFrame = NSInsetRect(stateFrame, 2, 2);
-        NSBezierPath* thePath = [NSBezierPath bezierPath];
-        [thePath appendBezierPathWithOvalInRect:NSOffsetRect(stateFrame, 0, 0)];
-        [[NSColor grayColor] set];
-        [thePath fill];
-
-        [self setFont:[NSFont boldSystemFontOfSize:0]];
-    } else {
-        [self setFont:[NSFont systemFontOfSize:0]];
-    }
-
     if (image != nil) {
         NSRect imageFrame;
         NSSize imageSize = [image size];
@@ -151,12 +135,12 @@
     }
 
     if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
-      if (![self isHighlighted]) [super setTextColor:[NSColor lightGrayColor]];
-      else [super setTextColor:[NSColor blackColor]];
+      if (![self isHighlighted]) [self setTextColor:[NSColor lightGrayColor]];
+      else [self setTextColor:[NSColor blackColor]];
     } else {
-      [super setTextColor:[NSColor blackColor]];
+      [self setTextColor:[NSColor blackColor]];
     };
-
+    
     [super drawWithFrame:cellFrame inView:controlView];
 }
 
@@ -169,7 +153,7 @@
     return cellSize;
 }
 
-- (NSUInteger)hitTestForEvent:(NSEvent *)event inRect:(NSRect)cellFrame ofView:(NSView *)controlView {
+- (NSCellHitResult)hitTestForEvent:(NSEvent *)event inRect:(NSRect)cellFrame ofView:(NSView *)controlView {
     NSPoint point = [controlView convertPoint:[event locationInWindow] fromView:nil];
     // If we have an image, we need to see if the user clicked on the image portion.
     if (image != nil) {

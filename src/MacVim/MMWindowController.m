@@ -1503,11 +1503,6 @@
     [fileBrowserController selectInBrowser];
 }
 
-- (IBAction)closeInFileBrowser:(id)sender
-{
-  [fileBrowserController closeInBrowser];
-}
-
 - (IBAction)revealInFileBrowser:(id)sender
 {
     [fileBrowserController selectInBrowserByExpandingItems];
@@ -1528,7 +1523,7 @@
                                             boolForKey:MMSidebarOnLeftEdgeKey];
     [self setSidebarView:sidebarView leftEdge:leftEdge];
     //[vimView placeViews];
-  [fileBrowserController reloadTheme];
+
     [vimController sendMessage:ForceRedrawMsgID data:nil];
 }
 
@@ -1960,7 +1955,7 @@
     CGFloat dw = s1.width - s0.width;
     CGFloat dh = s1.height - s0.height;
 
-    if (abs(dw) > 0 || abs(dh) > 0) {
+    if (fabs(dw) > 0 || fabs(dh) > 0) {
         NSRect frame = [decoratedWindow frame];
         frame.size.width += dw;
         frame.size.height += dh;

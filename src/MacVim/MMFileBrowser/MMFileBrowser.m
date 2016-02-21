@@ -17,11 +17,25 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
   return [MMPathCell class];
 }
 - (void) drawRect:(NSRect)dirtyRect {
+  [self updateColors];
+  NSRectFill (dirtyRect);
+  [super drawRect:dirtyRect];
+}
+
+-(void) updateColors {
+  //background for path selector root element (not drawn by cells)
   ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey])
   ? [[NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1] set]
   : [[NSColor whiteColor] set];
-  NSRectFill (dirtyRect);
-  [super drawRect:dirtyRect];
+    
+  NSColor* color = ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey])
+  ? [NSColor lightGrayColor]
+  : [NSColor blackColor];
+
+  NSArray<NSPathComponentCell *> *cells = [self pathComponentCells];
+  for (NSPathComponentCell* cell in cells) {
+    [cell setTextColor:color];
+  }
 }
 @end
 
@@ -31,9 +45,9 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 }
 @end
 
+
 @implementation MMPathComponentCell : NSPathComponentCell
 - (void)setURL:(NSURL *)url{
-  [self setTextColor:[NSColor grayColor]];
   [super setURL:url];
 }
 @end
@@ -44,28 +58,37 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
   NSRange    visibleRowIndexes   = [self rowsInRect:theClipRect];
   NSIndexSet *selectedRowIndexes = [self selectedRowIndexes];
   NSUInteger row, endRow = visibleRowIndexes.location + visibleRowIndexes.length;
-  NSColor *highlightColor = [[NSUserDefaults standardUserDefaults]
-                              boolForKey:MMSidebarDarkThemeKey]
-                          ? [NSColor grayColor]
-                          : [NSColor colorWithSRGBRed:0.9 green:0.9 blue:0.9 alpha:1];
-  [highlightColor set];
+  
+  [self updateColors];
+    
   for (row = visibleRowIndexes.location; row < endRow; row++)
     if([selectedRowIndexes containsIndex:row]) NSRectFill([self rectOfRow:row]);
 }
 
 - (void)drawBackgroundInClipRect:(NSRect)clipRect {
-  NSColor *bgColor = [[NSUserDefaults standardUserDefaults]
-                                      boolForKey:MMSidebarDarkThemeKey]
-                   ? [NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1]
-                   : [NSColor whiteColor];
-  [self setBackgroundColor:bgColor];
+  [self updateColors];
   [super drawBackgroundInClipRect:clipRect];
+}
+
+- (void)updateColors {
+    NSColor *bgColor;
+    NSColor *highlightColor;
+    if([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarDarkThemeKey]){
+      bgColor = [NSColor colorWithSRGBRed:0.2 green:0.2 blue:0.2 alpha:1];
+      highlightColor = [NSColor grayColor];
+    } else {
+      bgColor = [NSColor whiteColor];
+      highlightColor = [NSColor colorWithSRGBRed:0.9 green:0.9 blue:0.9 alpha:1];
+    }
+    [self setBackgroundColor:bgColor];
+    [highlightColor set];
 }
 
 - (id)initWithFrame:(NSRect)frame {
   if ((self = [super initWithFrame:frame])) {
     self.refusesFirstResponder = YES;
   }
+    
   return self;
 }
 
@@ -135,18 +158,18 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 - (void)keyDown:(NSEvent *)event {
   if (event.keyCode == ENTER_KEY_CODE && (event.modifierFlags & NSControlKeyMask)) {
     //ctrl-enter opens context menu
-      NSMenu *menu = [(id<MMFileBrowserDelegate>)self.delegate menuForRow:self.selectedRow];
-      NSPoint location = [self rectOfRow:self.selectedRow].origin;
-      location.x -= menu.size.width;
-      [menu popUpMenuPositioningItem:[menu itemAtIndex:0]
-                          atLocation:location
-                              inView:self];
+    NSMenu *menu = [(id<MMFileBrowserDelegate>)self.delegate menuForRow:self.selectedRow];
+    NSPoint location = [self rectOfRow:self.selectedRow].origin;
+    location.x -= menu.size.width;
+    [menu popUpMenuPositioningItem:[menu itemAtIndex:0]
+                        atLocation:location
+                            inView:self];
     return;
   } else if (event.keyCode == ENTER_KEY_CODE ||
              event.keyCode == LEFT_KEY_CODE ||
              event.keyCode == RIGHT_KEY_CODE) {
       [self sendSelectionChangedNotification];
-    return;
+      return;
   } else if (event.keyCode != TAB_KEY_CODE && event.keyCode != ESCAPE_KEY_CODE
       && event.keyCode != LEFT_KEY_CODE && event.keyCode != RIGHT_KEY_CODE
       && event.keyCode != DOWN_KEY_CODE && event.keyCode != UP_KEY_CODE) {

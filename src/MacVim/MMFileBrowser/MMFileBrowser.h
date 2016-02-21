@@ -3,6 +3,7 @@
 @class MMFileBrowserFSItem;
 
 @interface MMPathControl : NSPathControl
+-(void) updateColors;
 @end
 
 @interface MMPathCell : NSPathCell
@@ -19,6 +20,7 @@
 - (void)selectItem:(id)item;
 - (NSEvent *)keyEventWithEvent:(NSEvent *)event character:(NSString *)character code:(unsigned short)code;
 - (void)sendSelectionChangedNotification;
+- (void)updateColors;
 @end
 
 @protocol MMFileBrowserDelegate <NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate>

@@ -54,7 +54,6 @@
 }
 
 @property(nonatomic, retain) NSImage *image;
-@property(nonatomic) BOOL isOpen;
 
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView;
 - (NSSize)cellSize;
