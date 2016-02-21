@@ -29,5 +29,7 @@
 - (void)fileBrowserWillExpand:(MMFileBrowser *)fileBrowser
                          item:(MMFileBrowserFSItem *)item
                     recursive:(BOOL)recursive;
+- (void)outlineViewItemWillExpand:(NSNotification *)notification;
+
 @end
 

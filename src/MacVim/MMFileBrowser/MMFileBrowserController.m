@@ -411,8 +411,13 @@
   return menu;
 }
 
-// TODO is this the proper way to differentiate between selection changes because the user selected a file
-// and a programmatic selection change?
+-(void)outlineViewItemWillExpand:(NSNotification *)notification {
+    MMFileBrowserFSItem *item = [[notification userInfo] objectForKey:@"NSObject"];
+    [self fileBrowserWillExpand:fileBrowser item:item recursive:NO];
+}
+
+// TODO is this the proper way to differentiate between selection changes because the user
+//  selected a file and a programmatic selection change?
 - (void)outlineViewSelectionIsChanging:(NSNotification *)notification {
   userHasChangedSelection = YES;
 }

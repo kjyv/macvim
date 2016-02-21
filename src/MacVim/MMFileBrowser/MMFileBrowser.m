@@ -108,7 +108,7 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
   [super mouseDown:event];
 
   // In case the item is not a directory and was already selected, then force
-  // send the ‘selection did change’ delegate messagges.
+  // send the ‘selection did change’ delegate messages.
   if (event.clickCount == 1 && self.selectedRow == before && [item isLeaf]) {
     [self sendSelectionChangedNotification];
   }
@@ -133,17 +133,19 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 }
 
 - (void)keyDown:(NSEvent *)event {
-  if (event.keyCode == ENTER_KEY_CODE) {
-    if (event.modifierFlags & NSControlKeyMask) {
+  if (event.keyCode == ENTER_KEY_CODE && (event.modifierFlags & NSControlKeyMask)) {
+    //ctrl-enter opens context menu
       NSMenu *menu = [(id<MMFileBrowserDelegate>)self.delegate menuForRow:self.selectedRow];
       NSPoint location = [self rectOfRow:self.selectedRow].origin;
       location.x -= menu.size.width;
       [menu popUpMenuPositioningItem:[menu itemAtIndex:0]
                           atLocation:location
                               inView:self];
-    } else {
+    return;
+  } else if (event.keyCode == ENTER_KEY_CODE ||
+             event.keyCode == LEFT_KEY_CODE ||
+             event.keyCode == RIGHT_KEY_CODE) {
       [self sendSelectionChangedNotification];
-    }
     return;
   } else if (event.keyCode != TAB_KEY_CODE && event.keyCode != ESCAPE_KEY_CODE
       && event.keyCode != LEFT_KEY_CODE && event.keyCode != RIGHT_KEY_CODE
