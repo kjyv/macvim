@@ -21,7 +21,6 @@
 - (MMFileBrowserFSItem *)itemWithName:(NSString *)name;
 - (NSArray *)parents;
 - (MMFileBrowserFSItem *)dirItem;
+- (NSImage *)icon;
 
 @end
-
-

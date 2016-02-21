@@ -16,11 +16,11 @@
         <customObject id="-3" userLabel="Application" customClass="NSObject"/>
         <userDefaultsController representsSharedInstance="YES" id="58" userLabel="Shared Defaults"/>
         <customView id="115" userLabel="General">
-            <rect key="frame" x="0.0" y="0.0" width="483" height="354"/>
+            <rect key="frame" x="0.0" y="0.0" width="483" height="360"/>
             <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
             <subviews>
                 <popUpButton verticalHuggingPriority="750" id="957">
-                    <rect key="frame" x="206" y="19" width="197" height="26"/>
+                    <rect key="frame" x="206" y="16" width="197" height="26"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <popUpButtonCell key="cell" type="push" title="Keep MacVim Running" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" inset="2" selectedItem="960" id="979">
                         <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
@@ -38,7 +38,7 @@
                     </connections>
                 </popUpButton>
                 <textField verticalHuggingPriority="750" id="126">
-                    <rect key="frame" x="17" y="25" width="187" height="17"/>
+                    <rect key="frame" x="17" y="22" width="187" height="17"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="After last window closes:" id="977">
                         <font key="font" metaFont="system"/>
@@ -47,7 +47,7 @@
                     </textFieldCell>
                 </textField>
                 <popUpButton verticalHuggingPriority="750" id="427">
-                    <rect key="frame" x="218" y="112" width="229" height="26"/>
+                    <rect key="frame" x="218" y="109" width="229" height="26"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <popUpButtonCell key="cell" type="push" title="and set the arglist" bezelStyle="rounded" alignment="left" lineBreakMode="truncatingTail" state="on" borderStyle="borderAndBezel" inset="2" selectedItem="436" id="978">
                         <behavior key="behavior" lightByBackground="YES" lightByGray="YES"/>
@@ -74,7 +74,7 @@
                     </connections>
                 </popUpButton>
                 <textField verticalHuggingPriority="750" id="124">
-                    <rect key="frame" x="17" y="251" width="187" height="17"/>
+                    <rect key="frame" x="17" y="257" width="187" height="17"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="When MacVim launches:" id="976">
                         <font key="font" metaFont="system"/>
@@ -83,7 +83,7 @@
                     </textFieldCell>
                 </textField>
                 <button id="122">
-                    <rect key="frame" x="207" y="250" width="258" height="18"/>
+                    <rect key="frame" x="207" y="256" width="258" height="18"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <buttonCell key="cell" type="check" title="Check for updates" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="975">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -94,7 +94,7 @@
                     </connections>
                 </button>
                 <textField verticalHuggingPriority="750" id="121">
-                    <rect key="frame" x="209" y="50" width="243" height="58"/>
+                    <rect key="frame" x="209" y="47" width="243" height="58"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="left" id="974">
                         <font key="font" metaFont="smallSystem"/>
@@ -104,7 +104,7 @@
                     </textFieldCell>
                 </textField>
                 <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="120">
-                    <rect key="frame" x="209" y="144" width="243" height="38"/>
+                    <rect key="frame" x="209" y="141" width="243" height="38"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     <size key="cellSize" width="243" height="18"/>
@@ -131,7 +131,7 @@
                     </connections>
                 </matrix>
                 <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" autosizesCells="NO" id="119">
-                    <rect key="frame" x="209" y="276" width="243" height="58"/>
+                    <rect key="frame" x="209" y="282" width="243" height="58"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     <size key="cellSize" width="243" height="18"/>
@@ -160,8 +160,69 @@
                         <binding destination="58" name="selectedTag" keyPath="values.MMUntitledWindow" id="171"/>
                     </connections>
                 </matrix>
+                <button id="1032">
+                    <rect key="frame" x="207" y="231" width="258" height="18"/>
+                    <autoresizingMask key="autoresizingMask"/>
+                    <buttonCell key="cell" type="check" title="Show sidebar" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="1041">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <connections>
+                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="W6j-xU-vlK"/>
+                        <binding destination="58" name="value" keyPath="values.MMSidebarVisible" id="lqK-UG-6ta"/>
+                    </connections>
+                </button>
+                <textField verticalHuggingPriority="750" id="1033">
+                    <rect key="frame" x="17" y="232" width="187" height="17"/>
+                    <autoresizingMask key="autoresizingMask"/>
+                    <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="On opening windows:" id="1040">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
+                <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="1034">
+                    <rect key="frame" x="209" y="187" width="111" height="38"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                    <size key="cellSize" width="111" height="18"/>
+                    <size key="intercellSpacing" width="4" height="2"/>
+                    <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="1039">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <cells>
+                        <column>
+                            <buttonCell type="radio" title="on the left" imagePosition="left" alignment="left" state="on" inset="2" id="1038">
+                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                            </buttonCell>
+                            <buttonCell type="radio" title="on the right" imagePosition="left" alignment="left" tag="1" inset="2" id="1037">
+                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                            </buttonCell>
+                        </column>
+                    </cells>
+                    <connections>
+                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="1043"/>
+                        <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarOnLeftEdge" id="1046">
+                            <dictionary key="options">
+                                <string key="NSValueTransformerName">NSNegateBoolean</string>
+                            </dictionary>
+                        </binding>
+                    </connections>
+                </matrix>
+                <textField verticalHuggingPriority="750" id="1035">
+                    <rect key="frame" x="17" y="208" width="187" height="17"/>
+                    <autoresizingMask key="autoresizingMask"/>
+                    <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Sidebar appearance:" id="1036">
+                        <font key="font" metaFont="system"/>
+                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                    </textFieldCell>
+                </textField>
                 <textField verticalHuggingPriority="750" id="117">
-                    <rect key="frame" x="17" y="317" width="187" height="17"/>
+                    <rect key="frame" x="17" y="323" width="187" height="17"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Open untitled window:" id="973">
                         <font key="font" metaFont="system"/>
@@ -170,7 +231,7 @@
                     </textFieldCell>
                 </textField>
                 <textField verticalHuggingPriority="750" id="116">
-                    <rect key="frame" x="17" y="165" width="187" height="17"/>
+                    <rect key="frame" x="17" y="162" width="187" height="17"/>
                     <autoresizingMask key="autoresizingMask"/>
                     <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Open files from applications:" id="972">
                         <font key="font" metaFont="system"/>
@@ -178,68 +239,34 @@
                         <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     </textFieldCell>
                 </textField>
-                <textField verticalHuggingPriority="750" id="pAp-9d-dNF">
-                    <rect key="frame" x="17" y="232" width="187" height="17"/>
-                    <autoresizingMask key="autoresizingMask"/>
-                    <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="On opening windows:" id="Tc4-hY-mAW">
-                        <font key="font" metaFont="system"/>
-                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
-                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                    </textFieldCell>
-                </textField>
-                <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="6L1-Hj-6UM">
-                    <rect key="frame" x="209" y="187" width="239" height="38"/>
+                <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="zh6-Rq-zlo">
+                    <rect key="frame" x="328" y="187" width="120" height="38"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                    <size key="cellSize" width="239" height="18"/>
+                    <size key="cellSize" width="120" height="18"/>
                     <size key="intercellSpacing" width="4" height="2"/>
-                    <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="KfZ-kk-yAi">
+                    <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="RtQ-kT-0bs">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
                     </buttonCell>
                     <cells>
                         <column>
-                            <buttonCell type="radio" title="on the left" imagePosition="left" alignment="left" state="on" inset="2" id="tVK-ci-uOl">
+                            <buttonCell type="radio" title="system colors" imagePosition="left" alignment="left" state="on" inset="2" id="cIO-mj-lWi">
                                 <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
                             </buttonCell>
-                            <buttonCell type="radio" title="on the right" imagePosition="left" alignment="left" tag="1" inset="2" id="oXm-tV-aNL">
+                            <buttonCell type="radio" title="vim colors" imagePosition="left" alignment="left" tag="1" inset="2" id="REa-JY-4ZA">
                                 <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                                 <font key="font" metaFont="system"/>
                             </buttonCell>
                         </column>
                     </cells>
                     <connections>
-                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="5WA-oD-fw9"/>
-                        <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarOnLeftEdge" id="KhE-h1-yrq">
-                            <dictionary key="options">
-                                <string key="NSValueTransformerName">NSNegateBoolean</string>
-                            </dictionary>
-                        </binding>
+                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="734-zW-kBc"/>
+                        <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarUseVimThemeKey" id="J58-pA-Vnt"/>
                     </connections>
                 </matrix>
-                <textField verticalHuggingPriority="750" id="HCa-bv-DEP">
-                    <rect key="frame" x="17" y="208" width="187" height="17"/>
-                    <autoresizingMask key="autoresizingMask"/>
-                    <textFieldCell key="cell" sendsActionOnEndEditing="YES" alignment="right" title="Place sidebar:" id="AxQ-uV-IdI">
-                        <font key="font" metaFont="system"/>
-                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
-                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                    </textFieldCell>
-                </textField>
-                <button id="W3x-Os-xlj">
-                    <rect key="frame" x="207" y="231" width="258" height="18"/>
-                    <autoresizingMask key="autoresizingMask"/>
-                    <buttonCell key="cell" type="check" title="Show sidebar" bezelStyle="regularSquare" imagePosition="left" alignment="left" inset="2" id="1yb-7v-zKq">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <connections>
-                        <binding destination="58" name="value" keyPath="values.MMSidebarVisible" id="zTK-VA-WE0"/>
-                    </connections>
-                </button>
             </subviews>
-            <point key="canvasLocation" x="244.5" y="372"/>
         </customView>
         <customView id="620" userLabel="Advanced">
             <rect key="frame" x="0.0" y="0.0" width="483" height="318"/>

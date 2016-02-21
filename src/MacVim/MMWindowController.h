@@ -121,7 +121,6 @@
 - (IBAction)findAndReplace:(id)sender;
 - (IBAction)zoom:(id)sender;
 - (IBAction)openFileBrowser:(id)sender;
-- (IBAction)closeFileBrowser:(id)sender;
 - (IBAction)toggleFileBrowser:(id)sender;
 - (IBAction)selectInFileBrowser:(id)sender;
 - (IBAction)revealInFileBrowser:(id)sender;

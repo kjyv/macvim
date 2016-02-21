@@ -1,7 +1,7 @@
 /*
-     File: ImageAndTextCell.m
+ File: ImageAndTextCell.m
  Abstract: Subclass of NSTextFieldCell which can display text and an image simultaneously.
-  Version: 1.0
+ Version: 1.0
  
  Disclaimer: IMPORTANT:  This Apple software is supplied to you by Apple
  Inc. ("Apple") in consideration of your agreement to the following
@@ -43,19 +43,21 @@
  
  Copyright (C) 2009 Apple Inc. All Rights Reserved.
  
-*/
+ */
 
 
 #import "MMFileBrowserCell.h"
 #import <AppKit/NSCell.h>
+#import "Miscellaneous.h"
 
 @implementation MMFileBrowserCell
 
-- (id)init {
+- (id)initWithFileBrowser:parent {
     if ((self = [super init])) {
         [self setLineBreakMode:NSLineBreakByTruncatingTail];
         [self setSelectable:YES];
     }
+    fileBrowser = parent;
     return self;
 }
 
@@ -111,6 +113,15 @@
     [super selectWithFrame: textFrame inView: controlView editor:textObj delegate:anObject start:selStart length:selLength];
 }
 
+- (NSColor *)highlightColorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView{
+    return nil;
+}
+
+- (NSBackgroundStyle)interiorBackgroundStyle {
+    //TODO: make this dependent on vim background var?
+    return NSBackgroundStyleLight;
+}
+
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
     if (image != nil) {
         NSRect imageFrame;
@@ -124,7 +135,19 @@
         [image setFlipped:[controlView isFlipped]];
         [image drawAtPoint:imageFrame.origin fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
     }
+    
+    [self updateColors];
+    
     [super drawWithFrame:cellFrame inView:controlView];
+}
+
+- (void)updateColors {
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
+        [self setTextColor:[fileBrowser sidebarForegroundColor]];
+    } else {
+        //set system standard colors
+        [self setTextColor:[NSColor textColor]];
+    }
 }
 
 - (NSSize)cellSize {
@@ -136,7 +159,7 @@
     return cellSize;
 }
 
-- (NSUInteger)hitTestForEvent:(NSEvent *)event inRect:(NSRect)cellFrame ofView:(NSView *)controlView {
+- (NSCellHitResult)hitTestForEvent:(NSEvent *)event inRect:(NSRect)cellFrame ofView:(NSView *)controlView {
     NSPoint point = [controlView convertPoint:[event locationInWindow] fromView:nil];
     // If we have an image, we need to see if the user clicked on the image portion.
     if (image != nil) {
@@ -152,10 +175,10 @@
             // We consider this just a content area. It is not trackable, nor it it editable text. If it was, we would or in the additional items.
             // By returning the correct parts, we allow NSTableView to correctly begin an edit when the text portion is clicked on.
             return NSCellHitContentArea;
-        }        
+        }
     }
     // At this point, the cellFrame has been modified to exclude the portion for the image. Let the superclass handle the hit testing at this point.
-    return [super hitTestForEvent:event inRect:cellFrame ofView:controlView];    
+    return [super hitTestForEvent:event inRect:cellFrame ofView:controlView];
 }
 
 
