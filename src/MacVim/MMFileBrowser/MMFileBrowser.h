@@ -2,10 +2,6 @@
 
 @class MMFileBrowserFSItem;
 
-@interface MMPathControl : NSPathControl
--(void) updateColors;
-@end
-
 @interface MMPathCell : NSPathCell
 @end
 
@@ -13,6 +9,9 @@
 @end
 
 @interface MMFileBrowser : NSOutlineView
+@property (nonatomic, copy) NSColor *sidebarForegroundColor;
+@property (nonatomic, copy) NSColor *sidebarBackgroundColor;
+
 - (void)makeFirstResponder;
 - (NSMenu *)menuForEvent:(NSEvent *)event;
 - (void)cancelOperation:(id)sender;
@@ -20,7 +19,8 @@
 - (void)selectItem:(id)item;
 - (NSEvent *)keyEventWithEvent:(NSEvent *)event character:(NSString *)character code:(unsigned short)code;
 - (void)sendSelectionChangedNotification;
-- (void)updateColors;
+- (void)setColorsWithBackground:(NSColor*)bgColor foreground:(NSColor*)fgColor;
+
 @end
 
 @protocol MMFileBrowserDelegate <NSObject, NSOutlineViewDataSource, NSOutlineViewDelegate>
@@ -32,6 +32,14 @@
                          item:(MMFileBrowserFSItem *)item
                     recursive:(BOOL)recursive;
 - (void)outlineViewItemWillExpand:(NSNotification *)notification;
-
 @end
 
+@interface MMPathControl : NSPathControl {
+@private
+    MMFileBrowser* fileBrowser;
+}
+
+- (void)updateColors;
+- (id)initWithFrame:(NSRect)frameRect parent:(MMFileBrowser*)parent;
+
+@end

@@ -24,5 +24,3 @@
 - (NSImage *)icon;
 
 @end
-
-

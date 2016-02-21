@@ -6,16 +6,16 @@
 @class MMFileBrowserFSItem;
 
 @interface MMFileBrowserController : NSViewController <MMFileBrowserDelegate> {
-  MMWindowController *windowController;
-  MMFileBrowser *fileBrowser;
-  NSPathControl *pathControl;
-  MMFileBrowserFSItem *rootItem;
-  FSEventStreamRef fsEventsStream;
-  BOOL userHasChangedSelection;
-  BOOL viewLoaded;
-  NSArray *dragItems;
+    MMWindowController *windowController;
+    MMFileBrowser *fileBrowser;
+    NSPathControl *pathControl;
+    MMFileBrowserFSItem *rootItem;
+    FSEventStreamRef fsEventsStream;
+    BOOL userHasChangedSelection;
+    BOOL viewLoaded;
+    NSArray *dragItems;
 }
-
+- (MMFileBrowser*) fileBrowser;
 - (id)initWithWindowController:(MMWindowController *)controller;
 - (void)cleanup;
 - (void)setRoot:(NSString *)root;

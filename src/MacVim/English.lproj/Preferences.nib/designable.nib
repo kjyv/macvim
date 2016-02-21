@@ -168,6 +168,7 @@
                         <font key="font" metaFont="system"/>
                     </buttonCell>
                     <connections>
+                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="W6j-xU-vlK"/>
                         <binding destination="58" name="value" keyPath="values.MMSidebarVisible" id="lqK-UG-6ta"/>
                     </connections>
                 </button>
@@ -181,10 +182,10 @@
                     </textFieldCell>
                 </textField>
                 <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="1034">
-                    <rect key="frame" x="209" y="187" width="239" height="38"/>
+                    <rect key="frame" x="209" y="187" width="111" height="38"/>
                     <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
                     <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                    <size key="cellSize" width="239" height="18"/>
+                    <size key="cellSize" width="111" height="18"/>
                     <size key="intercellSpacing" width="4" height="2"/>
                     <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="1039">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
@@ -205,37 +206,6 @@
                     <connections>
                         <action selector="sidebarEdgePreferenceChanged:" target="-1" id="1043"/>
                         <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarOnLeftEdge" id="1046">
-                            <dictionary key="options">
-                                <string key="NSValueTransformerName">NSNegateBoolean</string>
-                            </dictionary>
-                        </binding>
-                    </connections>
-                </matrix>
-                <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="zh6-Rq-zlo">
-                    <rect key="frame" x="328" y="187" width="120" height="38"/>
-                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
-                    <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
-                    <size key="cellSize" width="120" height="18"/>
-                    <size key="intercellSpacing" width="4" height="2"/>
-                    <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="RtQ-kT-0bs">
-                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                        <font key="font" metaFont="system"/>
-                    </buttonCell>
-                    <cells>
-                        <column>
-                            <buttonCell type="radio" title="dark theme" imagePosition="left" alignment="left" state="on" inset="2" id="cIO-mj-lWi">
-                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                                <font key="font" metaFont="system"/>
-                            </buttonCell>
-                            <buttonCell type="radio" title="light theme" imagePosition="left" alignment="left" tag="1" inset="2" id="REa-JY-4ZA">
-                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
-                                <font key="font" metaFont="system"/>
-                            </buttonCell>
-                        </column>
-                    </cells>
-                    <connections>
-                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="xSN-9K-dBC"/>
-                        <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarDarkThemeKey" id="2v7-7D-cfl">
                             <dictionary key="options">
                                 <string key="NSValueTransformerName">NSNegateBoolean</string>
                             </dictionary>
@@ -269,6 +239,33 @@
                         <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
                     </textFieldCell>
                 </textField>
+                <matrix verticalHuggingPriority="750" allowsEmptySelection="NO" id="zh6-Rq-zlo">
+                    <rect key="frame" x="328" y="187" width="120" height="38"/>
+                    <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMinY="YES"/>
+                    <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                    <size key="cellSize" width="120" height="18"/>
+                    <size key="intercellSpacing" width="4" height="2"/>
+                    <buttonCell key="prototype" type="radio" title="Radio" imagePosition="left" alignment="left" inset="2" id="RtQ-kT-0bs">
+                        <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                        <font key="font" metaFont="system"/>
+                    </buttonCell>
+                    <cells>
+                        <column>
+                            <buttonCell type="radio" title="system colors" imagePosition="left" alignment="left" state="on" inset="2" id="cIO-mj-lWi">
+                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                            </buttonCell>
+                            <buttonCell type="radio" title="vim colors" imagePosition="left" alignment="left" tag="1" inset="2" id="REa-JY-4ZA">
+                                <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
+                                <font key="font" metaFont="system"/>
+                            </buttonCell>
+                        </column>
+                    </cells>
+                    <connections>
+                        <action selector="sidebarEdgePreferenceChanged:" target="-1" id="734-zW-kBc"/>
+                        <binding destination="58" name="selectedIndex" keyPath="values.MMSidebarUseVimThemeKey" id="J58-pA-Vnt"/>
+                    </connections>
+                </matrix>
             </subviews>
         </customView>
         <customView id="620" userLabel="Advanced">

@@ -216,7 +216,7 @@ fsEventCallback(ConstFSEventStreamRef streamRef,
 #endif // INCLUDE_OLD_IM_CODE
         [NSNumber numberWithBool:NO],   MMSuppressTerminationAlertKey,
         [NSNumber numberWithBool:NO],   MMSidebarOnLeftEdgeKey,
-        [NSNumber numberWithBool:NO],   MMSidebarDarkThemeKey,
+        [NSNumber numberWithBool:NO],   MMSidebarUseVimThemeKey,
         [NSNumber numberWithInt:MMSidebarDefaultWidth],
                                         MMSidebarWidthKey,
         [NSNumber numberWithBool:NO],   MMSidebarVisibleKey,
