@@ -462,7 +462,7 @@ enum {
     // Show or hide resize indicator if view is rightmost in the window.
     NSPoint pt = [textView convertPoint:textViewFrame.origin toView:nil];
     CGFloat x0 = pt.x + textViewFrame.size.width;
-    CGFloat x1 = [win frame].size.width - [NSScroller scrollerWidth];
+    CGFloat x1 = [win frame].size.width - [NSScroller scrollerWidthForControlSize:NSRegularControlSize scrollerStyle:NSScrollerStyleLegacy];
     BOOL isRightmost = x0 >= x1;
     BOOL showsResizeIndicator = [win showsResizeIndicator];
     if (isRightmost) {

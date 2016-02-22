@@ -29,23 +29,21 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 }
 
 - (void)updateColors {
-    if (fileBrowser.sidebarBackgroundColor != nil && fileBrowser.sidebarForegroundColor) {
-        if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
-            //background for path selector root element (not drawn by cells)
-            [fileBrowser.sidebarBackgroundColor set];
-            
-            NSArray<NSPathComponentCell *> *cells = [self pathComponentCells];
-            for (NSPathComponentCell* cell in cells) {
-                [cell setTextColor:fileBrowser.sidebarForegroundColor];
-            }
-        } else {
-            //set system standard colors
-            NSArray<NSPathComponentCell *> *cells = [self pathComponentCells];
-            for (NSPathComponentCell* cell in cells) {
-                [cell setTextColor:[NSColor textColor]];
-            }
-            [[NSColor controlBackgroundColor] set];
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
+        //background for path selector root element (not drawn by cells)
+        [fileBrowser.sidebarBackgroundColor set];
+        
+        NSArray<NSPathComponentCell *> *cells = [self pathComponentCells];
+        for (NSPathComponentCell* cell in cells) {
+            [cell setTextColor:fileBrowser.sidebarForegroundColor];
         }
+    } else {
+        //set system standard colors
+        NSArray<NSPathComponentCell *> *cells = [self pathComponentCells];
+        for (NSPathComponentCell* cell in cells) {
+            [cell setTextColor:[NSColor textColor]];
+        }
+        [[NSColor controlBackgroundColor] set];
     }
 }
 
@@ -73,7 +71,12 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
     NSIndexSet *selectedRowIndexes = [self selectedRowIndexes];
     NSUInteger row, endRow = visibleRowIndexes.location + visibleRowIndexes.length;
     
-    [self updateColors];
+    //file browser row bg (for the arrow, not the cell)
+    if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
+        [[sidebarBackgroundColor highlightWithLevel:0.7] set];
+    } else {
+        [[NSColor selectedTextBackgroundColor] set];
+    }
     
     for (row = visibleRowIndexes.location; row < endRow; row++)
         if([selectedRowIndexes containsIndex:row]) NSRectFill([self rectOfRow:row]);
@@ -86,8 +89,8 @@ static NSString *LEFT_KEY_CHAR, *RIGHT_KEY_CHAR, *DOWN_KEY_CHAR, *UP_KEY_CHAR;
 
 - (void)updateColors {
     if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
-        [self setBackgroundColor:sidebarBackgroundColor];
         [sidebarForegroundColor set];
+        [self setBackgroundColor:sidebarBackgroundColor];
     } else {
         [[NSColor textColor] set];
         [self setBackgroundColor:[NSColor controlBackgroundColor]];

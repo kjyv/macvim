@@ -114,31 +114,45 @@
 }
 
 - (NSColor *)highlightColorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView{
+    //allow drawing custom background in drawWithFrame without loosing text render
+    //see: http://stackoverflow.com/questions/5041349/nscell-custom-highlight
     return nil;
 }
 
 - (NSBackgroundStyle)interiorBackgroundStyle {
-    //TODO: make this dependent on vim background var?
     return NSBackgroundStyleLight;
 }
 
 - (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView {
+    if ([self isHighlighted]) {
+        [self setDrawsBackground:YES];
+        if ([[NSUserDefaults standardUserDefaults] boolForKey:MMSidebarUseVimThemeKey]){
+            [[fileBrowser.sidebarBackgroundColor highlightWithLevel:0.7] set];
+            [self setTextColor:[fileBrowser.sidebarForegroundColor shadowWithLevel:0.7]];
+        } else {
+            [[NSColor selectedTextBackgroundColor] set];
+            [self setTextColor:[NSColor selectedTextColor]];
+        }
+    } else {
+        [self updateColors];
+        [self setDrawsBackground:NO];
+    }
+    
     if (image != nil) {
         NSRect imageFrame;
         NSSize imageSize = [image size];
         NSDivideRect(cellFrame, &imageFrame, &cellFrame, 3 + imageSize.width, NSMinXEdge);
         if ([self drawsBackground]) {
-            [[self backgroundColor] set];
             NSRectFill(imageFrame);
+            NSRectFill(cellFrame);
         }
         imageFrame.origin.x += 3;
         [image setFlipped:[controlView isFlipped]];
         [image drawAtPoint:imageFrame.origin fromRect:NSZeroRect operation:NSCompositeSourceOver fraction:1.0];
     }
     
-    [self updateColors];
-    
-    [super drawWithFrame:cellFrame inView:controlView];
+    [self setDrawsBackground:NO];
+    [super drawInteriorWithFrame:cellFrame inView:controlView];
 }
 
 - (void)updateColors {

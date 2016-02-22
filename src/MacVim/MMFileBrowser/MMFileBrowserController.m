@@ -60,6 +60,7 @@
 }
 
 - (void)loadView {
+    //init file entries
     fileBrowser = [[MMFileBrowser alloc] initWithFrame:NSZeroRect];
     [fileBrowser setFocusRingType:NSFocusRingTypeNone];
     [fileBrowser setDelegate:self];
@@ -72,7 +73,6 @@
     [column setDataCell:cell];
     [fileBrowser addTableColumn:column];
     [fileBrowser setOutlineTableColumn:column];
-    
     [fileBrowser setTarget:self];
     [fileBrowser setDoubleAction:@selector(makeFirstResponder:)];
     
