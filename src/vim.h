@@ -27,8 +27,7 @@
 # endif
 #endif
 
-#if defined(MSDOS) || defined(WIN32) || defined(_WIN64) \
-	|| defined(__EMX__)
+#if defined(WIN32) || defined(_WIN64) || defined(__EMX__)
 # include "vimio.h"
 #endif
 
@@ -165,21 +164,6 @@
 #ifdef WIN3264
 # define VIM_SIZEOF_INT 4
 #endif
-#ifdef MSDOS
-# ifdef DJGPP
-#  ifndef FEAT_GUI_GTK		/* avoid problems when generating prototypes */
-#   define VIM_SIZEOF_INT 4	/* 32 bit ints */
-#  endif
-#  define DOS32
-#  define FEAT_CLIPBOARD
-# else
-#  ifndef FEAT_GUI_GTK		/* avoid problems when generating prototypes */
-#   define VIM_SIZEOF_INT 2	/* 16 bit ints */
-#  endif
-#  define SMALL_MALLOC		/* 16 bit storage allocation */
-#  define DOS16
-# endif
-#endif
 
 #ifdef AMIGA
   /* Be conservative about sizeof(int). It could be 4 too. */
@@ -302,10 +286,6 @@
 
 #ifdef AMIGA
 # include "os_amiga.h"
-#endif
-
-#ifdef MSDOS
-# include "os_msdos.h"
 #endif
 
 #ifdef WIN3264
@@ -463,11 +443,11 @@ typedef unsigned long u8char_T;	    /* long should be 32 bits or more */
 #ifdef _DCC
 # include <sys/stat.h>
 #endif
-#if defined(MSDOS) || defined(MSWIN)
+#if defined(MSWIN)
 # include <sys/stat.h>
 #endif
 
-#if defined(HAVE_ERRNO_H) || defined(DJGPP) \
+#if defined(HAVE_ERRNO_H) \
 	|| defined(WIN32) || defined(_WIN64) || defined(__EMX__)
 # include <errno.h>
 #endif
@@ -1920,10 +1900,6 @@ typedef int sock_T;
 #  ifdef FEAT_OLE
 #   define WM_OLE (WM_APP+0)
 #  endif
-#  ifdef FEAT_CHANNEL
-    /* message for channel socket event */
-#   define WM_NETBEANS (WM_APP+1)
-#  endif
 # endif
 
 /* Info about selected text */
@@ -1998,10 +1974,6 @@ typedef int VimClipboard;	/* This is required for the prototypes. */
 
 
 #include "globals.h"	    /* global variables and messages */
-
-#ifdef FEAT_SNIFF
-# include "if_sniff.h"
-#endif
 
 #ifndef FEAT_VIRTUALEDIT
 # define getvvcol(w, p, s, c, e) getvcol(w, p, s, c, e)

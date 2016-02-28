@@ -564,11 +564,6 @@ static char *(features[]) =
 #else
 	"-smartindent",
 #endif
-#ifdef FEAT_SNIFF
-	"+sniff",
-#else
-	"-sniff",
-#endif
 #ifdef STARTUPTIME
 	"+startuptime",
 #else
@@ -763,6 +758,142 @@ static char *(features[]) =
 
 static int included_patches[] =
 {   /* Add new patch number below this line */
+/**/
+    1453,
+/**/
+    1452,
+/**/
+    1451,
+/**/
+    1450,
+/**/
+    1449,
+/**/
+    1448,
+/**/
+    1447,
+/**/
+    1446,
+/**/
+    1445,
+/**/
+    1444,
+/**/
+    1443,
+/**/
+    1442,
+/**/
+    1441,
+/**/
+    1440,
+/**/
+    1439,
+/**/
+    1438,
+/**/
+    1437,
+/**/
+    1436,
+/**/
+    1435,
+/**/
+    1434,
+/**/
+    1433,
+/**/
+    1432,
+/**/
+    1431,
+/**/
+    1430,
+/**/
+    1429,
+/**/
+    1428,
+/**/
+    1427,
+/**/
+    1426,
+/**/
+    1425,
+/**/
+    1424,
+/**/
+    1423,
+/**/
+    1422,
+/**/
+    1421,
+/**/
+    1420,
+/**/
+    1419,
+/**/
+    1418,
+/**/
+    1417,
+/**/
+    1416,
+/**/
+    1415,
+/**/
+    1414,
+/**/
+    1413,
+/**/
+    1412,
+/**/
+    1411,
+/**/
+    1410,
+/**/
+    1409,
+/**/
+    1408,
+/**/
+    1407,
+/**/
+    1406,
+/**/
+    1405,
+/**/
+    1404,
+/**/
+    1403,
+/**/
+    1402,
+/**/
+    1401,
+/**/
+    1400,
+/**/
+    1399,
+/**/
+    1398,
+/**/
+    1397,
+/**/
+    1396,
+/**/
+    1395,
+/**/
+    1394,
+/**/
+    1393,
+/**/
+    1392,
+/**/
+    1391,
+/**/
+    1390,
+/**/
+    1389,
+/**/
+    1388,
+/**/
+    1387,
+/**/
+    1386,
 /**/
     1385,
 /**/
@@ -3698,13 +3829,6 @@ list_version(void)
 #  endif
 # endif
 #endif
-#ifdef MSDOS
-# ifdef DJGPP
-    MSG_PUTS(_("\n32-bit MS-DOS version"));
-# else
-    MSG_PUTS(_("\n16-bit MS-DOS version"));
-# endif
-#endif
 #ifdef MACOS
 # ifdef MACOS_X
 #  ifdef MACOS_X_UNIX
@@ -3814,11 +3938,15 @@ list_version(void)
     MSG_PUTS(_("without GUI."));
 #else
 # ifdef FEAT_GUI_GTK
-#  ifdef FEAT_GUI_GNOME
-    MSG_PUTS(_("with GTK2-GNOME GUI."));
+#  ifdef USE_GTK3
+    MSG_PUTS(_("with GTK3 GUI."));
 #  else
-    MSG_PUTS(_("with GTK2 GUI."));
-#  endif
+#   ifdef FEAT_GUI_GNOME
+     MSG_PUTS(_("with GTK2-GNOME GUI."));
+#   else
+     MSG_PUTS(_("with GTK2 GUI."));
+#   endif
+# endif
 # else
 #  ifdef FEAT_GUI_MOTIF
     MSG_PUTS(_("with X11-Motif GUI."));

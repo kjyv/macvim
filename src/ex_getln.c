@@ -206,9 +206,6 @@ getcmdline(
     struct cmdline_info save_ccline;
 #endif
 
-#ifdef FEAT_SNIFF
-    want_sniff_request = 0;
-#endif
 #ifdef FEAT_EVAL
     if (firstc == -1)
     {
@@ -4932,7 +4929,7 @@ expand_shellcmd(
 	if (*s == ' ')
 	    ++s;	/* Skip space used for absolute path name. */
 
-#if defined(MSDOS) || defined(MSWIN)
+#if defined(MSWIN)
 	e = vim_strchr(s, ';');
 #else
 	e = vim_strchr(s, ':');
@@ -5231,7 +5228,7 @@ globpath(
 	copy_option_part(&path, buf, MAXPATHL, ",");
 	if (STRLEN(buf) + STRLEN(file) + 2 < MAXPATHL)
 	{
-# if defined(MSWIN) || defined(MSDOS)
+# if defined(MSWIN)
 	    /* Using the platform's path separator (\) makes vim incorrectly
 	     * treat it as an escape character, use '/' instead. */
 	    if (*buf != NUL && !after_pathsep(buf, buf + STRLEN(buf)))

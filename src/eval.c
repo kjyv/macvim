@@ -10,6 +10,7 @@
 /*
  * eval.c: Expression evaluation.
  */
+#define USING_FLOAT_STUFF
 
 #include "vim.h"
 
@@ -25,10 +26,6 @@
 
 #ifdef MACOS
 # include <time.h>	/* for time_t */
-#endif
-
-#if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
-# include <math.h>
 #endif
 
 #define DICT_MAXNEST 100	/* maximum nesting of lists and dicts */
@@ -501,6 +498,9 @@ static void f_ceil(typval_T *argvars, typval_T *rettv);
 #endif
 #ifdef FEAT_CHANNEL
 static void f_ch_close(typval_T *argvars, typval_T *rettv);
+static void f_ch_evalexpr(typval_T *argvars, typval_T *rettv);
+static void f_ch_evalraw(typval_T *argvars, typval_T *rettv);
+static void f_ch_getbufnr(typval_T *argvars, typval_T *rettv);
 # ifdef FEAT_JOB
 static void f_ch_getjob(typval_T *argvars, typval_T *rettv);
 # endif
@@ -628,6 +628,9 @@ static void f_insert(typval_T *argvars, typval_T *rettv);
 static void f_invert(typval_T *argvars, typval_T *rettv);
 static void f_isdirectory(typval_T *argvars, typval_T *rettv);
 static void f_islocked(typval_T *argvars, typval_T *rettv);
+#if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
+static void f_isnan(typval_T *argvars, typval_T *rettv);
+#endif
 static void f_items(typval_T *argvars, typval_T *rettv);
 #ifdef FEAT_JOB
 # ifdef FEAT_CHANNEL
@@ -7736,18 +7739,15 @@ failret:
 
 #if defined(FEAT_CHANNEL) || defined(PROTO)
 /*
- * Decrement the reference count on "channel" and free it when it goes down to
- * zero.
- * Returns TRUE when the channel was freed.
+ * Decrement the reference count on "channel" and maybe free it when it goes
+ * down to zero.  Don't free it if there is a pending action.
+ * Returns TRUE when the channel is no longer referenced.
  */
     int
 channel_unref(channel_T *channel)
 {
     if (channel != NULL && --channel->ch_refcount <= 0)
-    {
-	channel_free(channel);
-	return TRUE;
-    }
+	return channel_may_free(channel);
     return FALSE;
 }
 #endif
@@ -7759,10 +7759,14 @@ static job_T *first_job = NULL;
 job_free(job_T *job)
 {
 # ifdef FEAT_CHANNEL
+    ch_log(job->jv_channel, "Freeing job");
     if (job->jv_channel != NULL)
     {
-	/* The channel doesn't count as a references for the job, we need to
-	 * NULL the reference when the job is freed. */
+	/* The link from the channel to the job doesn't count as a reference,
+	 * thus don't decrement the refcount of the job.  The reference from
+	 * the job to the channel does count the refrence, decrement it and
+	 * NULL the reference.  We don't set ch_job_killed, unreferencing the
+	 * job doesn't mean it stops running. */
 	job->jv_channel->ch_job = NULL;
 	channel_unref(job->jv_channel);
     }
@@ -7790,7 +7794,19 @@ job_unref(job_T *job)
 	 * "stoponexit" flag or an exit callback. */
 	if (job->jv_status != JOB_STARTED
 		|| (job->jv_stoponexit == NULL && job->jv_exit_cb == NULL))
+	{
 	    job_free(job);
+	}
+# ifdef FEAT_CHANNEL
+	else if (job->jv_channel != NULL)
+	{
+	    /* Do remove the link to the channel, otherwise it hangs
+	     * around until Vim exits. See job_free() for refcount. */
+	    job->jv_channel->ch_job = NULL;
+	    channel_unref(job->jv_channel);
+	    job->jv_channel = NULL;
+	}
+# endif
     }
 }
 
@@ -8189,6 +8205,9 @@ static struct fst
 #endif
 #ifdef FEAT_CHANNEL
     {"ch_close",	1, 1, f_ch_close},
+    {"ch_evalexpr",	2, 3, f_ch_evalexpr},
+    {"ch_evalraw",	2, 3, f_ch_evalraw},
+    {"ch_getbufnr",	2, 2, f_ch_getbufnr},
 # ifdef FEAT_JOB
     {"ch_getjob",	1, 1, f_ch_getjob},
 # endif
@@ -8320,6 +8339,9 @@ static struct fst
     {"invert",		1, 1, f_invert},
     {"isdirectory",	1, 1, f_isdirectory},
     {"islocked",	1, 1, f_islocked},
+#if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
+    {"isnan",		1, 1, f_isnan},
+#endif
     {"items",		1, 1, f_items},
 #ifdef FEAT_JOB
 # ifdef FEAT_CHANNEL
@@ -9489,7 +9511,7 @@ f_asin(typval_T *argvars, typval_T *rettv)
     static void
 f_atan(typval_T *argvars, typval_T *rettv)
 {
-    float_T	f;
+    float_T	f = 0.0;
 
     rettv->v_type = VAR_FLOAT;
     if (get_float_arg(argvars, &f) == OK)
@@ -9961,10 +9983,43 @@ handle_mode(typval_T *item, jobopt_T *opt, ch_mode_T *modep, int jo)
     return OK;
 }
 
+    static int
+handle_io(typval_T *item, int part, jobopt_T *opt)
+{
+    char_u	*val = get_tv_string(item);
+
+    opt->jo_set |= JO_OUT_IO << (part - PART_OUT);
+    if (STRCMP(val, "null") == 0)
+	opt->jo_io[part] = JIO_NULL;
+    else if (STRCMP(val, "pipe") == 0)
+	opt->jo_io[part] = JIO_PIPE;
+    else if (STRCMP(val, "file") == 0)
+	opt->jo_io[part] = JIO_FILE;
+    else if (STRCMP(val, "buffer") == 0)
+	opt->jo_io[part] = JIO_BUFFER;
+    else if (STRCMP(val, "out") == 0 && part == PART_ERR)
+	opt->jo_io[part] = JIO_OUT;
+    else
+    {
+	EMSG2(_(e_invarg2), val);
+	return FAIL;
+    }
+    return OK;
+}
+
     static void
 clear_job_options(jobopt_T *opt)
 {
     vim_memset(opt, 0, sizeof(jobopt_T));
+}
+
+/*
+ * Get the PART_ number from the first character of an option name.
+ */
+    static int
+part_from_char(int c)
+{
+    return c == 'i' ? PART_IN : c == 'o' ? PART_OUT: PART_ERR;
 }
 
 /*
@@ -9981,6 +10036,7 @@ get_job_options(typval_T *tv, jobopt_T *opt, int supported)
     dict_T	*dict;
     int		todo;
     hashitem_T	*hi;
+    int		part;
 
     opt->jo_set = 0;
     if (tv->v_type == VAR_UNKNOWN)
@@ -10031,6 +10087,27 @@ get_job_options(typval_T *tv, jobopt_T *opt, int supported)
 								      == FAIL)
 		    return FAIL;
 	    }
+	    else if (STRCMP(hi->hi_key, "in-io") == 0
+		    || STRCMP(hi->hi_key, "out-io") == 0
+		    || STRCMP(hi->hi_key, "err-io") == 0)
+	    {
+		if (!(supported & JO_OUT_IO))
+		    break;
+		if (handle_io(item, part_from_char(*hi->hi_key), opt) == FAIL)
+		    return FAIL;
+	    }
+	    else if (STRCMP(hi->hi_key, "in-name") == 0
+		    || STRCMP(hi->hi_key, "out-name") == 0
+		    || STRCMP(hi->hi_key, "err-name") == 0)
+	    {
+		part = part_from_char(*hi->hi_key);
+
+		if (!(supported & JO_OUT_IO))
+		    break;
+		opt->jo_set |= JO_OUT_NAME << (part - PART_OUT);
+		opt->jo_io_name[part] =
+		       get_tv_string_buf_chk(item, opt->jo_io_name_buf[part]);
+	    }
 	    else if (STRCMP(hi->hi_key, "callback") == 0)
 	    {
 		if (!(supported & JO_CALLBACK))
@@ -10064,6 +10141,18 @@ get_job_options(typval_T *tv, jobopt_T *opt, int supported)
 		if (opt->jo_err_cb == NULL)
 		{
 		    EMSG2(_(e_invarg2), "err-cb");
+		    return FAIL;
+		}
+	    }
+	    else if (STRCMP(hi->hi_key, "close-cb") == 0)
+	    {
+		if (!(supported & JO_CLOSE_CALLBACK))
+		    break;
+		opt->jo_set |= JO_CLOSE_CALLBACK;
+		opt->jo_close_cb = get_callback(item);
+		if (opt->jo_close_cb == NULL)
+		{
+		    EMSG2(_(e_invarg2), "close-cb");
 		    return FAIL;
 		}
 	    }
@@ -10189,7 +10278,37 @@ f_ch_close(typval_T *argvars, typval_T *rettv UNUSED)
     channel_T *channel = get_channel_arg(&argvars[0]);
 
     if (channel != NULL)
-	channel_close(channel);
+    {
+	channel_close(channel, FALSE);
+	channel_clear(channel);
+    }
+}
+
+/*
+ * "ch_getbufnr()" function
+ */
+    static void
+f_ch_getbufnr(typval_T *argvars, typval_T *rettv)
+{
+    channel_T *channel = get_channel_arg(&argvars[0]);
+
+    rettv->vval.v_number = -1;
+    if (channel != NULL)
+    {
+	char_u	*what = get_tv_string(&argvars[1]);
+	int	part;
+
+	if (STRCMP(what, "err") == 0)
+	    part = PART_ERR;
+	else if (STRCMP(what, "out") == 0)
+	    part = PART_OUT;
+	else if (STRCMP(what, "in") == 0)
+	    part = PART_IN;
+	else
+	    part = PART_SOCK;
+	if (channel->ch_part[part].ch_buffer != NULL)
+	    rettv->vval.v_number = channel->ch_part[part].ch_buffer->b_fnum;
+    }
 }
 
 # ifdef FEAT_JOB
@@ -10358,7 +10477,10 @@ common_channel_read(typval_T *argvars, typval_T *rettv, int raw)
 		id = opt.jo_id;
 	    channel_read_json_block(channel, part, timeout, id, &listtv);
 	    if (listtv != NULL)
+	    {
 		*rettv = *listtv;
+		vim_free(listtv);
+	    }
 	    else
 	    {
 		rettv->v_type = VAR_SPECIAL;
@@ -10393,7 +10515,13 @@ f_ch_readraw(typval_T *argvars, typval_T *rettv)
  * Otherwise returns NULL.
  */
     static channel_T *
-send_common(typval_T *argvars, char_u *text, int id, char *fun, int *part_read)
+send_common(
+	typval_T *argvars,
+	char_u *text,
+	int id,
+	int eval,
+	char *fun,
+	int *part_read)
 {
     channel_T	*channel;
     jobopt_T	opt;
@@ -10410,9 +10538,17 @@ send_common(typval_T *argvars, char_u *text, int id, char *fun, int *part_read)
 	return NULL;
 
     /* Set the callback. An empty callback means no callback and not reading
-     * the response. */
+     * the response. With "ch_evalexpr()" and "ch_evalraw()" a callback is not
+     * allowed. */
     if (opt.jo_callback != NULL && *opt.jo_callback != NUL)
+    {
+	if (eval)
+	{
+	    EMSG2(_("E917: Cannot use a callback with %s()"), fun);
+	    return NULL;
+	}
 	channel_set_req_callback(channel, part_send, opt.jo_callback, id);
+    }
 
     if (channel_send(channel, part_send, text, fun) == OK
 						   && opt.jo_callback == NULL)
@@ -10421,10 +10557,10 @@ send_common(typval_T *argvars, char_u *text, int id, char *fun, int *part_read)
 }
 
 /*
- * "ch_sendexpr()" function
+ * common for "ch_evalexpr()" and "ch_sendexpr()"
  */
     static void
-f_ch_sendexpr(typval_T *argvars, typval_T *rettv)
+ch_expr_common(typval_T *argvars, typval_T *rettv, int eval)
 {
     char_u	*text;
     typval_T	*listtv;
@@ -10447,7 +10583,7 @@ f_ch_sendexpr(typval_T *argvars, typval_T *rettv)
     ch_mode = channel_get_mode(channel, part_send);
     if (ch_mode == MODE_RAW || ch_mode == MODE_NL)
     {
-	EMSG(_("E912: cannot use ch_sendexpr() with a raw or nl channel"));
+	EMSG(_("E912: cannot use ch_evalexpr()/ch_sendexpr() with a raw or nl channel"));
 	return;
     }
 
@@ -10457,9 +10593,10 @@ f_ch_sendexpr(typval_T *argvars, typval_T *rettv)
     if (text == NULL)
 	return;
 
-    channel = send_common(argvars, text, id, "sendexpr", &part_read);
+    channel = send_common(argvars, text, id, eval,
+			    eval ? "ch_evalexpr" : "ch_sendexpr", &part_read);
     vim_free(text);
-    if (channel != NULL)
+    if (channel != NULL && eval)
     {
 	/* TODO: timeout from options */
 	timeout = channel_get_timeout(channel, part_read);
@@ -10478,10 +10615,28 @@ f_ch_sendexpr(typval_T *argvars, typval_T *rettv)
 }
 
 /*
- * "ch_sendraw()" function
+ * "ch_evalexpr()" function
  */
     static void
-f_ch_sendraw(typval_T *argvars, typval_T *rettv)
+f_ch_evalexpr(typval_T *argvars, typval_T *rettv)
+{
+    ch_expr_common(argvars, rettv, TRUE);
+}
+
+/*
+ * "ch_sendexpr()" function
+ */
+    static void
+f_ch_sendexpr(typval_T *argvars, typval_T *rettv)
+{
+    ch_expr_common(argvars, rettv, FALSE);
+}
+
+/*
+ * common for "ch_evalraw()" and "ch_sendraw()"
+ */
+    static void
+ch_raw_common(typval_T *argvars, typval_T *rettv, int eval)
 {
     char_u	buf[NUMBUFLEN];
     char_u	*text;
@@ -10494,13 +10649,32 @@ f_ch_sendraw(typval_T *argvars, typval_T *rettv)
     rettv->vval.v_string = NULL;
 
     text = get_tv_string_buf(&argvars[1], buf);
-    channel = send_common(argvars, text, 0, "sendraw", &part_read);
-    if (channel != NULL)
+    channel = send_common(argvars, text, 0, eval,
+			      eval ? "ch_evalraw" : "ch_sendraw", &part_read);
+    if (channel != NULL && eval)
     {
 	/* TODO: timeout from options */
 	timeout = channel_get_timeout(channel, part_read);
 	rettv->vval.v_string = channel_read_block(channel, part_read, timeout);
     }
+}
+
+/*
+ * "ch_evalraw()" function
+ */
+    static void
+f_ch_evalraw(typval_T *argvars, typval_T *rettv)
+{
+    ch_raw_common(argvars, rettv, TRUE);
+}
+
+/*
+ * "ch_sendraw()" function
+ */
+    static void
+f_ch_sendraw(typval_T *argvars, typval_T *rettv)
+{
+    ch_raw_common(argvars, rettv, FALSE);
 }
 
 /*
@@ -13498,13 +13672,6 @@ f_has(typval_T *argvars, typval_T *rettv)
 #ifdef __BEOS__
 	"beos",
 #endif
-#ifdef MSDOS
-# ifdef DJGPP
-	"dos32",
-# else
-	"dos16",
-# endif
-#endif
 #ifdef MACOS
 	"mac",
 #endif
@@ -13676,7 +13843,11 @@ f_has(typval_T *argvars, typval_T *rettv)
 #endif
 #ifdef FEAT_GUI_GTK
 	"gui_gtk",
+# ifdef USE_GTK3
+	"gui_gtk3",
+# else
 	"gui_gtk2",
+# endif
 #endif
 #ifdef FEAT_GUI_GNOME
 	"gui_gnome",
@@ -13853,9 +14024,6 @@ f_has(typval_T *argvars, typval_T *rettv)
 #endif
 #ifdef FEAT_SMARTINDENT
 	"smartindent",
-#endif
-#ifdef FEAT_SNIFF
-	"sniff",
 #endif
 #ifdef STARTUPTIME
 	"startuptime",
@@ -14750,6 +14918,18 @@ f_islocked(typval_T *argvars, typval_T *rettv)
     clear_lval(&lv);
 }
 
+#if defined(FEAT_FLOAT) && defined(HAVE_MATH_H)
+/*
+ * "isnan()" function
+ */
+    static void
+f_isnan(typval_T *argvars, typval_T *rettv)
+{
+    rettv->vval.v_number = argvars[0].v_type == VAR_FLOAT
+					    && isnan(argvars[0].vval.v_float);
+}
+#endif
+
 static void dict_list(typval_T *argvars, typval_T *rettv, int what);
 
 /*
@@ -14931,7 +15111,7 @@ f_job_start(typval_T *argvars UNUSED, typval_T *rettv)
     opt.jo_mode = MODE_NL;
     if (get_job_options(&argvars[1], &opt,
 	    JO_MODE_ALL + JO_CB_ALL + JO_TIMEOUT_ALL
-					+ JO_STOPONEXIT + JO_EXIT_CB) == FAIL)
+			    + JO_STOPONEXIT + JO_EXIT_CB + JO_OUT_IO) == FAIL)
 	return;
     job_set_options(job, &opt);
 
@@ -15058,7 +15238,8 @@ job_status(job_T *job)
 	    typval_T	rettv;
 	    int		dummy;
 
-	    /* invoke the exit callback */
+	    /* invoke the exit callback; make sure the refcount is > 0 */
+	    ++job->jv_refcount;
 	    argv[0].v_type = VAR_JOB;
 	    argv[0].vval.v_job = job;
 	    argv[1].v_type = VAR_NUMBER;
@@ -15066,10 +15247,11 @@ job_status(job_T *job)
 	    call_func(job->jv_exit_cb, (int)STRLEN(job->jv_exit_cb),
 				 &rettv, 2, argv, 0L, 0L, &dummy, TRUE, NULL);
 	    clear_tv(&rettv);
+	    --job->jv_refcount;
 	}
 	if (job->jv_status == JOB_ENDED && job->jv_refcount == 0)
 	{
-	    /* The job already was unreferenced, now that it ended it can be
+	    /* The job was already unreferenced, now that it ended it can be
 	     * freed. Careful: caller must not use "job" after this! */
 	    job_free(job);
 	}
@@ -15081,7 +15263,7 @@ job_status(job_T *job)
  * Called once in a while: check if any jobs with an "exit-cb" have ended.
  */
     void
-job_check_ended()
+job_check_ended(void)
 {
     static time_t   last_check = 0;
     time_t	    now;
@@ -15142,10 +15324,20 @@ f_job_stop(typval_T *argvars UNUSED, typval_T *rettv UNUSED)
 		return;
 	    }
 	}
+# ifdef FEAT_CHANNEL
+	ch_logs(job->jv_channel, "Stopping job with '%s'", (char *)arg);
+# endif
 	if (mch_stop_job(job, arg) == FAIL)
 	    rettv->vval.v_number = 0;
 	else
+	{
 	    rettv->vval.v_number = 1;
+	    /* Assume that "hup" does not kill the job. */
+	    if (job->jv_channel != NULL && STRCMP(arg, "hup") != 0)
+		job->jv_channel->ch_job_killed = TRUE;
+	}
+	/* We don't try freeing the job, obviously the caller still has a
+	 * reference to it. */
     }
 }
 #endif
@@ -18815,16 +19007,21 @@ typedef struct
     int		idx;
 } sortItem_T;
 
-static int	item_compare_ic;
-static int	item_compare_numeric;
-static int	item_compare_numbers;
+/* struct storing information about current sort */
+typedef struct
+{
+    int		item_compare_ic;
+    int		item_compare_numeric;
+    int		item_compare_numbers;
 #ifdef FEAT_FLOAT
-static int	item_compare_float;
+    int		item_compare_float;
 #endif
-static char_u	*item_compare_func;
-static dict_T	*item_compare_selfdict;
-static int	item_compare_func_err;
-static int	item_compare_keep_zero;
+    char_u	*item_compare_func;
+    dict_T	*item_compare_selfdict;
+    int		item_compare_func_err;
+    int		item_compare_keep_zero;
+} sortinfo_T;
+static sortinfo_T	*sortinfo = NULL;
 static void	do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort);
 #define ITEM_COMPARE_FAIL 999
 
@@ -18850,7 +19047,7 @@ item_compare(const void *s1, const void *s2)
     tv1 = &si1->item->li_tv;
     tv2 = &si2->item->li_tv;
 
-    if (item_compare_numbers)
+    if (sortinfo->item_compare_numbers)
     {
 	long	v1 = get_tv_number(tv1);
 	long	v2 = get_tv_number(tv2);
@@ -18859,7 +19056,7 @@ item_compare(const void *s1, const void *s2)
     }
 
 #ifdef FEAT_FLOAT
-    if (item_compare_float)
+    if (sortinfo->item_compare_float)
     {
 	float_T	v1 = get_tv_float(tv1);
 	float_T	v2 = get_tv_float(tv2);
@@ -18873,7 +19070,7 @@ item_compare(const void *s1, const void *s2)
      * non-string to do what the docs promise. */
     if (tv1->v_type == VAR_STRING)
     {
-	if (tv2->v_type != VAR_STRING || item_compare_numeric)
+	if (tv2->v_type != VAR_STRING || sortinfo->item_compare_numeric)
 	    p1 = (char_u *)"'";
 	else
 	    p1 = tv1->vval.v_string;
@@ -18882,7 +19079,7 @@ item_compare(const void *s1, const void *s2)
 	p1 = tv2string(tv1, &tofree1, numbuf1, 0);
     if (tv2->v_type == VAR_STRING)
     {
-	if (tv1->v_type != VAR_STRING || item_compare_numeric)
+	if (tv1->v_type != VAR_STRING || sortinfo->item_compare_numeric)
 	    p2 = (char_u *)"'";
 	else
 	    p2 = tv2->vval.v_string;
@@ -18893,9 +19090,9 @@ item_compare(const void *s1, const void *s2)
 	p1 = (char_u *)"";
     if (p2 == NULL)
 	p2 = (char_u *)"";
-    if (!item_compare_numeric)
+    if (!sortinfo->item_compare_numeric)
     {
-	if (item_compare_ic)
+	if (sortinfo->item_compare_ic)
 	    res = STRICMP(p1, p2);
 	else
 	    res = STRCMP(p1, p2);
@@ -18910,7 +19107,7 @@ item_compare(const void *s1, const void *s2)
 
     /* When the result would be zero, compare the item indexes.  Makes the
      * sort stable. */
-    if (res == 0 && !item_compare_keep_zero)
+    if (res == 0 && !sortinfo->item_compare_keep_zero)
 	res = si1->idx > si2->idx ? 1 : -1;
 
     vim_free(tofree1);
@@ -18931,7 +19128,7 @@ item_compare2(const void *s1, const void *s2)
     int		dummy;
 
     /* shortcut after failure in previous call; compare all items equal */
-    if (item_compare_func_err)
+    if (sortinfo->item_compare_func_err)
 	return 0;
 
     si1 = (sortItem_T *)s1;
@@ -18943,23 +19140,24 @@ item_compare2(const void *s1, const void *s2)
     copy_tv(&si2->item->li_tv, &argv[1]);
 
     rettv.v_type = VAR_UNKNOWN;		/* clear_tv() uses this */
-    res = call_func(item_compare_func, (int)STRLEN(item_compare_func),
+    res = call_func(sortinfo->item_compare_func,
+				 (int)STRLEN(sortinfo->item_compare_func),
 				 &rettv, 2, argv, 0L, 0L, &dummy, TRUE,
-				 item_compare_selfdict);
+				 sortinfo->item_compare_selfdict);
     clear_tv(&argv[0]);
     clear_tv(&argv[1]);
 
     if (res == FAIL)
 	res = ITEM_COMPARE_FAIL;
     else
-	res = get_tv_number_chk(&rettv, &item_compare_func_err);
-    if (item_compare_func_err)
+	res = get_tv_number_chk(&rettv, &sortinfo->item_compare_func_err);
+    if (sortinfo->item_compare_func_err)
 	res = ITEM_COMPARE_FAIL;  /* return value has wrong type */
     clear_tv(&rettv);
 
     /* When the result would be zero, compare the pointers themselves.  Makes
      * the sort stable. */
-    if (res == 0 && !item_compare_keep_zero)
+    if (res == 0 && !sortinfo->item_compare_keep_zero)
 	res = si1->idx > si2->idx ? 1 : -1;
 
     return res;
@@ -18974,8 +19172,15 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
     list_T	*l;
     listitem_T	*li;
     sortItem_T	*ptrs;
+    sortinfo_T	*old_sortinfo;
+    sortinfo_T	info;
     long	len;
     long	i;
+
+    /* Pointer to current info struct used in compare function. Save and
+     * restore the current one for nested calls. */
+    old_sortinfo = sortinfo;
+    sortinfo = &info;
 
     if (argvars[0].v_type != VAR_LIST)
 	EMSG2(_(e_listarg), sort ? "sort()" : "uniq()");
@@ -18985,62 +19190,62 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 	if (l == NULL || tv_check_lock(l->lv_lock,
 	     (char_u *)(sort ? N_("sort() argument") : N_("uniq() argument")),
 									TRUE))
-	    return;
+	    goto theend;
 	rettv->vval.v_list = l;
 	rettv->v_type = VAR_LIST;
 	++l->lv_refcount;
 
 	len = list_len(l);
 	if (len <= 1)
-	    return;	/* short list sorts pretty quickly */
+	    goto theend;	/* short list sorts pretty quickly */
 
-	item_compare_ic = FALSE;
-	item_compare_numeric = FALSE;
-	item_compare_numbers = FALSE;
+	info.item_compare_ic = FALSE;
+	info.item_compare_numeric = FALSE;
+	info.item_compare_numbers = FALSE;
 #ifdef FEAT_FLOAT
-	item_compare_float = FALSE;
+	info.item_compare_float = FALSE;
 #endif
-	item_compare_func = NULL;
-	item_compare_selfdict = NULL;
+	info.item_compare_func = NULL;
+	info.item_compare_selfdict = NULL;
 	if (argvars[1].v_type != VAR_UNKNOWN)
 	{
 	    /* optional second argument: {func} */
 	    if (argvars[1].v_type == VAR_FUNC)
-		item_compare_func = argvars[1].vval.v_string;
+		info.item_compare_func = argvars[1].vval.v_string;
 	    else
 	    {
 		int	    error = FALSE;
 
 		i = get_tv_number_chk(&argvars[1], &error);
 		if (error)
-		    return;		/* type error; errmsg already given */
+		    goto theend;	/* type error; errmsg already given */
 		if (i == 1)
-		    item_compare_ic = TRUE;
+		    info.item_compare_ic = TRUE;
 		else
-		    item_compare_func = get_tv_string(&argvars[1]);
-		if (item_compare_func != NULL)
+		    info.item_compare_func = get_tv_string(&argvars[1]);
+		if (info.item_compare_func != NULL)
 		{
-		    if (STRCMP(item_compare_func, "n") == 0)
+		    if (STRCMP(info.item_compare_func, "n") == 0)
 		    {
-			item_compare_func = NULL;
-			item_compare_numeric = TRUE;
+			info.item_compare_func = NULL;
+			info.item_compare_numeric = TRUE;
 		    }
-		    else if (STRCMP(item_compare_func, "N") == 0)
+		    else if (STRCMP(info.item_compare_func, "N") == 0)
 		    {
-			item_compare_func = NULL;
-			item_compare_numbers = TRUE;
+			info.item_compare_func = NULL;
+			info.item_compare_numbers = TRUE;
 		    }
 #ifdef FEAT_FLOAT
-		    else if (STRCMP(item_compare_func, "f") == 0)
+		    else if (STRCMP(info.item_compare_func, "f") == 0)
 		    {
-			item_compare_func = NULL;
-			item_compare_float = TRUE;
+			info.item_compare_func = NULL;
+			info.item_compare_float = TRUE;
 		    }
 #endif
-		    else if (STRCMP(item_compare_func, "i") == 0)
+		    else if (STRCMP(info.item_compare_func, "i") == 0)
 		    {
-			item_compare_func = NULL;
-			item_compare_ic = TRUE;
+			info.item_compare_func = NULL;
+			info.item_compare_ic = TRUE;
 		    }
 		}
 	    }
@@ -19051,16 +19256,16 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 		if (argvars[2].v_type != VAR_DICT)
 		{
 		    EMSG(_(e_dictreq));
-		    return;
+		    goto theend;
 		}
-		item_compare_selfdict = argvars[2].vval.v_dict;
+		info.item_compare_selfdict = argvars[2].vval.v_dict;
 	    }
 	}
 
 	/* Make an array with each entry pointing to an item in the List. */
 	ptrs = (sortItem_T *)alloc((int)(len * sizeof(sortItem_T)));
 	if (ptrs == NULL)
-	    return;
+	    goto theend;
 
 	i = 0;
 	if (sort)
@@ -19073,10 +19278,10 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 		++i;
 	    }
 
-	    item_compare_func_err = FALSE;
-	    item_compare_keep_zero = FALSE;
+	    info.item_compare_func_err = FALSE;
+	    info.item_compare_keep_zero = FALSE;
 	    /* test the compare function */
-	    if (item_compare_func != NULL
+	    if (info.item_compare_func != NULL
 		    && item_compare2((void *)&ptrs[0], (void *)&ptrs[1])
 							 == ITEM_COMPARE_FAIL)
 		EMSG(_("E702: Sort compare function failed"));
@@ -19084,9 +19289,10 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 	    {
 		/* Sort the array with item pointers. */
 		qsort((void *)ptrs, (size_t)len, sizeof(sortItem_T),
-		    item_compare_func == NULL ? item_compare : item_compare2);
+		    info.item_compare_func == NULL
+					       ? item_compare : item_compare2);
 
-		if (!item_compare_func_err)
+		if (!info.item_compare_func_err)
 		{
 		    /* Clear the List and append the items in sorted order. */
 		    l->lv_first = l->lv_last = l->lv_idx_item = NULL;
@@ -19101,9 +19307,9 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 	    int	(*item_compare_func_ptr)(const void *, const void *);
 
 	    /* f_uniq(): ptrs will be a stack of items to remove */
-	    item_compare_func_err = FALSE;
-	    item_compare_keep_zero = TRUE;
-	    item_compare_func_ptr = item_compare_func
+	    info.item_compare_func_err = FALSE;
+	    info.item_compare_keep_zero = TRUE;
+	    item_compare_func_ptr = info.item_compare_func
 					       ? item_compare2 : item_compare;
 
 	    for (li = l->lv_first; li != NULL && li->li_next != NULL;
@@ -19112,14 +19318,14 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 		if (item_compare_func_ptr((void *)&li, (void *)&li->li_next)
 									 == 0)
 		    ptrs[i++].item = li;
-		if (item_compare_func_err)
+		if (info.item_compare_func_err)
 		{
 		    EMSG(_("E882: Uniq compare function failed"));
 		    break;
 		}
 	    }
 
-	    if (!item_compare_func_err)
+	    if (!info.item_compare_func_err)
 	    {
 		while (--i >= 0)
 		{
@@ -19138,6 +19344,8 @@ do_sort_uniq(typval_T *argvars, typval_T *rettv, int sort)
 
 	vim_free(ptrs);
     }
+theend:
+    sortinfo = old_sortinfo;
 }
 
 /*

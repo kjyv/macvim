@@ -1336,9 +1336,6 @@ typedef struct {
 #ifdef FEAT_GUI_GTK
     gint	ch_inputHandler; /* Cookie for input */
 #endif
-#ifdef WIN32
-    int		ch_inputHandler; /* ret.value of WSAAsyncSelect() */
-#endif
 #ifdef FEAT_GUI_MACVIM
     void	*ch_inputHandler; /* Cookie for input */
 #endif
@@ -1353,6 +1350,7 @@ typedef struct {
 
     cbq_T	ch_cb_head;	/* dummy node for per-request callbacks */
     char_u	*ch_callback;	/* call when a msg is not handled */
+    buf_T	*ch_buffer;	/* buffer to read from or write to */
 } chanpart_T;
 
 struct channel_S {
@@ -1369,37 +1367,58 @@ struct channel_S {
 				 * first error until the connection works
 				 * again. */
 
-    void	(*ch_close_cb)(void); /* callback for when channel is closed */
+    void	(*ch_nb_close_cb)(void);
+				/* callback for Netbeans when channel is
+				 * closed */
 
     char_u	*ch_callback;	/* call when any msg is not handled */
+    char_u	*ch_close_cb;	/* call when channel is closed */
 
     job_T	*ch_job;	/* Job that uses this channel; this does not
 				 * count as a reference to avoid a circular
 				 * reference. */
+    int		ch_job_killed;	/* TRUE when there was a job and it was killed
+				 * or we know it died. */
 
     int		ch_refcount;	/* reference count */
 };
 
-#define JO_MODE		0x0001	/* channel mode */
-#define JO_IN_MODE	0x0002	/* stdin mode */
-#define JO_OUT_MODE	0x0004	/* stdout mode */
-#define JO_ERR_MODE	0x0008	/* stderr mode */
-#define JO_CALLBACK	0x0010	/* channel callback */
-#define JO_OUT_CALLBACK	0x0020	/* stdout callback */
-#define JO_ERR_CALLBACK	0x0040	/* stderr callback */
-#define JO_WAITTIME	0x0080	/* only for ch_open() */
-#define JO_TIMEOUT	0x0100	/* all timeouts */
-#define JO_OUT_TIMEOUT	0x0200	/* stdout timeouts */
-#define JO_ERR_TIMEOUT	0x0400	/* stderr timeouts */
-#define JO_PART		0x0800	/* "part" */
-#define JO_ID		0x1000	/* "id" */
-#define JO_STOPONEXIT	0x2000	/* "stoponexit" */
-#define JO_EXIT_CB	0x4000	/* "exit-cb" */
-#define JO_ALL		0xffffff
+#define JO_MODE		    0x0001	/* channel mode */
+#define JO_IN_MODE	    0x0002	/* stdin mode */
+#define JO_OUT_MODE	    0x0004	/* stdout mode */
+#define JO_ERR_MODE	    0x0008	/* stderr mode */
+#define JO_CALLBACK	    0x0010	/* channel callback */
+#define JO_OUT_CALLBACK	    0x0020	/* stdout callback */
+#define JO_ERR_CALLBACK	    0x0040	/* stderr callback */
+#define JO_CLOSE_CALLBACK   0x0080	/* close callback */
+#define JO_WAITTIME	    0x0100	/* only for ch_open() */
+#define JO_TIMEOUT	    0x0200	/* all timeouts */
+#define JO_OUT_TIMEOUT	    0x0400	/* stdout timeouts */
+#define JO_ERR_TIMEOUT	    0x0800	/* stderr timeouts */
+#define JO_PART		    0x1000	/* "part" */
+#define JO_ID		    0x2000	/* "id" */
+#define JO_STOPONEXIT	    0x4000	/* "stoponexit" */
+#define JO_EXIT_CB	    0x8000	/* "exit-cb" */
+#define JO_OUT_IO	    0x10000	/* "out-io" */
+#define JO_ERR_IO	    0x20000	/* "err-io" (JO_OUT_IO << 1) */
+#define JO_IN_IO	    0x40000	/* "in-io" (JO_OUT_IO << 2) */
+#define JO_OUT_NAME	    0x80000	/* "out-name" */
+#define JO_ERR_NAME	    0x100000	/* "err-name" (JO_OUT_NAME << 1) */
+#define JO_IN_NAME	    0x200000	/* "in-name" (JO_OUT_NAME << 2) */
+#define JO_ALL		    0xffffff
 
 #define JO_MODE_ALL	(JO_MODE + JO_IN_MODE + JO_OUT_MODE + JO_ERR_MODE)
-#define JO_CB_ALL	(JO_CALLBACK + JO_OUT_CALLBACK + JO_ERR_CALLBACK)
+#define JO_CB_ALL \
+    (JO_CALLBACK + JO_OUT_CALLBACK + JO_ERR_CALLBACK + JO_CLOSE_CALLBACK)
 #define JO_TIMEOUT_ALL	(JO_TIMEOUT + JO_OUT_TIMEOUT + JO_ERR_TIMEOUT)
+
+typedef enum {
+    JIO_NULL,
+    JIO_PIPE,
+    JIO_FILE,
+    JIO_BUFFER,
+    JIO_OUT
+} job_io_T;
 
 /*
  * Options for job and channel commands.
@@ -1412,9 +1431,15 @@ typedef struct
     ch_mode_T	jo_in_mode;
     ch_mode_T	jo_out_mode;
     ch_mode_T	jo_err_mode;
+
+    job_io_T	jo_io[4];	/* PART_OUT, PART_ERR, PART_IN */
+    char_u	jo_io_name_buf[4][NUMBUFLEN];
+    char_u	*jo_io_name[4];	/* not allocated! */
+
     char_u	*jo_callback;	/* not allocated! */
     char_u	*jo_out_cb;	/* not allocated! */
     char_u	*jo_err_cb;	/* not allocated! */
+    char_u	*jo_close_cb;	/* not allocated! */
     int		jo_waittime;
     int		jo_timeout;
     int		jo_out_timeout;
@@ -1617,10 +1642,6 @@ struct file_buffer
     char	 b_fab_rat;	/* Record attribute */
     unsigned int b_fab_mrs;	/* Max record size  */
 #endif
-#ifdef FEAT_SNIFF
-    int		b_sniff;	/* file was loaded through Sniff */
-#endif
-
     int		b_fnum;		/* buffer number for this file. */
 
     int		b_changed;	/* 'modified': Set to TRUE if something in the
@@ -1842,9 +1863,7 @@ struct file_buffer
 #endif
     int		b_p_ro;		/* 'readonly' */
     long	b_p_sw;		/* 'shiftwidth' */
-#ifndef SHORT_FNAME
     int		b_p_sn;		/* 'shortname' */
-#endif
 #ifdef FEAT_SMARTINDENT
     int		b_p_si;		/* 'smartindent' */
 #endif
@@ -1983,9 +2002,7 @@ struct file_buffer
 				   access b_spell without #ifdef. */
 #endif
 
-#ifndef SHORT_FNAME
     int		b_shortname;	/* this file has an 8.3 file name */
-#endif
 
 #ifdef FEAT_MZSCHEME
     void	*b_mzscheme_ref; /* The MzScheme reference to this buffer */
@@ -2746,7 +2763,9 @@ struct VimMenu
 #ifdef FEAT_GUI_GTK
     GtkWidget	*id;		    /* Manage this to enable item */
     GtkWidget	*submenu_id;	    /* If this is submenu, add children here */
+# if defined(GTK_CHECK_VERSION) && !GTK_CHECK_VERSION(3,4,0)
     GtkWidget	*tearoff_handle;
+# endif
     GtkWidget   *label;		    /* Used by "set wak=" code. */
 #endif
 #ifdef FEAT_GUI_MOTIF

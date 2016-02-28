@@ -326,7 +326,7 @@ static int		s_findrep_is_find;	/* TRUE for find dialog, FALSE
 #endif
 
 static HINSTANCE	s_hinst = NULL;
-#if !defined(FEAT_SNIFF) && !defined(FEAT_GUI)
+#if !defined(FEAT_GUI)
 static
 #endif
 HWND			s_hwnd = NULL;
@@ -1927,41 +1927,6 @@ process_message(void)
     }
 #endif
 
-#ifdef FEAT_CHANNEL
-    if (msg.message == WM_NETBEANS)
-    {
-	int	    part;
-	channel_T   *channel = channel_fd2channel((sock_T)msg.wParam, &part);
-
-	if (channel != NULL)
-	{
-	    /* Disable error messages, they can mess up the display and throw
-	     * an exception. */
-	    ++emsg_off;
-	    channel_read(channel, part, "process_message");
-	    --emsg_off;
-	}
-	return;
-    }
-#endif
-
-#ifdef FEAT_SNIFF
-    if (sniff_request_waiting && want_sniff_request)
-    {
-	static char_u bytes[3] = {CSI, (char_u)KS_EXTRA, (char_u)KE_SNIFF};
-	add_to_input_buf(bytes, 3); /* K_SNIFF */
-	sniff_request_waiting = 0;
-	want_sniff_request = 0;
-	/* request is handled in normal.c */
-    }
-    if (msg.message == WM_USER)
-    {
-	MyTranslateMessage(&msg);
-	pDispatchMessage(&msg);
-	return;
-    }
-#endif
-
 #ifdef MSWIN_FIND_REPLACE
     /* Don't process messages used by the dialog */
     if (s_findrep_hwnd != NULL && pIsDialogMessage(s_findrep_hwnd, &msg))
@@ -2245,7 +2210,18 @@ gui_mch_wait_for_chars(int wtime)
 	}
 
 #ifdef MESSAGE_QUEUE
-	parse_queued_messages();
+	/* Check channel while waiting message. */
+	for (;;)
+	{
+	    MSG msg;
+
+	    parse_queued_messages();
+
+	    if (pPeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE)
+		|| MsgWaitForMultipleObjects(0, NULL, FALSE, 100, QS_ALLEVENTS)
+								!= WAIT_TIMEOUT)
+		break;
+	}
 #endif
 
 	/*
@@ -6665,7 +6641,13 @@ gui_mch_draw_string(
 		/* Use unicodepdy to make characters fit as we expect, even
 		 * when the font uses different widths (e.g., bold character
 		 * is wider).  */
-		unicodepdy[clen] = cw * gui.char_width;
+		if (c >= 0x10000)
+		{
+		    unicodepdy[wlen - 2] = cw * gui.char_width;
+		    unicodepdy[wlen - 1] = 0;
+		}
+		else
+		    unicodepdy[wlen - 1] = cw * gui.char_width;
 	    }
 	    cells += cw;
 	    i += utfc_ptr2len_len(text + i, len - i);
