@@ -66,6 +66,7 @@
 #define ADDR_BUFFERS		4
 #define ADDR_TABS		5
 #define ADDR_QUICKFIX		6
+#define ADDR_OTHER		99
 
 #ifndef DO_DECLARE_EXCMD
 typedef struct exarg exarg_T;
@@ -810,9 +811,6 @@ EX(CMD_loadview,	"loadview",	ex_loadview,
 EX(CMD_loadkeymap,	"loadkeymap",	ex_loadkeymap,
 			CMDWIN,
 			ADDR_LINES),
-EX(CMD_loadplugin,	"loadplugin",	ex_loadplugin,
-			BANG|FILE1|TRLBAR|SBOXOK|CMDWIN,
-			ADDR_LINES),
 EX(CMD_lockmarks,	"lockmarks",	ex_wrongmodifier,
 			NEEDARG|EXTRA|NOTRLCOM,
 			ADDR_LINES),
@@ -895,8 +893,8 @@ EX(CMD_menutranslate,	"menutranslate", ex_menutranslate,
 			EXTRA|TRLBAR|NOTRLCOM|USECTRLV|CMDWIN,
 			ADDR_LINES),
 EX(CMD_messages,	"messages",	ex_messages,
-			TRLBAR|CMDWIN,
-			ADDR_LINES),
+			EXTRA|TRLBAR|RANGE|CMDWIN,
+			ADDR_OTHER),
 EX(CMD_mkexrc,		"mkexrc",	ex_mkrc,
 			BANG|FILE1|TRLBAR|CMDWIN,
 			ADDR_LINES),
@@ -1019,6 +1017,12 @@ EX(CMD_ownsyntax,	"ownsyntax",	ex_ownsyntax,
 			ADDR_LINES),
 EX(CMD_print,		"print",	ex_print,
 			RANGE|WHOLEFOLD|COUNT|EXFLAGS|TRLBAR|CMDWIN|SBOXOK,
+			ADDR_LINES),
+EX(CMD_packadd,		"packadd",	ex_packadd,
+			BANG|FILE1|NEEDARG|TRLBAR|SBOXOK|CMDWIN,
+			ADDR_LINES),
+EX(CMD_packloadall,	"packloadall",	ex_packloadall,
+			BANG|TRLBAR|SBOXOK|CMDWIN,
 			ADDR_LINES),
 EX(CMD_pclose,		"pclose",	ex_pclose,
 			BANG|TRLBAR,

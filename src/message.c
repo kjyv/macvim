@@ -766,20 +766,54 @@ delete_first_msg(void)
  * ":messages" command.
  */
     void
-ex_messages(exarg_T *eap UNUSED)
+ex_messages(exarg_T *eap)
 {
     struct msg_hist *p;
     char_u	    *s;
+    int		    c = 0;
+
+    if (STRCMP(eap->arg, "clear") == 0)
+    {
+	int keep = eap->addr_count == 0 ? 0 : eap->line2;
+
+	while (msg_hist_len > keep)
+	    (void)delete_first_msg();
+	return;
+    }
+
+    if (*eap->arg != NUL)
+    {
+	EMSG(_(e_invarg));
+	return;
+    }
 
     msg_hist_off = TRUE;
 
-    s = mch_getenv((char_u *)"LANG");
-    if (s != NULL && *s != NUL)
-	msg_attr((char_u *)
-		_("Messages maintainer: Bram Moolenaar <Bram@vim.org>"),
-		hl_attr(HLF_T));
+    p = first_msg_hist;
+    if (eap->addr_count != 0)
+    {
+	/* Count total messages */
+	for (; p != NULL && !got_int; p = p->next)
+	    c++;
 
-    for (p = first_msg_hist; p != NULL && !got_int; p = p->next)
+	c -= eap->line2;
+
+	/* Skip without number of messages specified */
+	for (p = first_msg_hist; p != NULL && !got_int && c > 0;
+						    p = p->next, c--);
+    }
+
+    if (p == first_msg_hist)
+    {
+	s = mch_getenv((char_u *)"LANG");
+	if (s != NULL && *s != NUL)
+	    msg_attr((char_u *)
+		    _("Messages maintainer: Bram Moolenaar <Bram@vim.org>"),
+		    hl_attr(HLF_T));
+    }
+
+    /* Display what was not skipped. */
+    for (; p != NULL && !got_int; p = p->next)
 	if (p->msg != NULL)
 	    msg_attr(p->msg, p->attr);
 
@@ -870,6 +904,8 @@ wait_return(int redraw)
 #ifdef USE_ON_FLY_SCROLL
 	dont_scroll = TRUE;		/* disallow scrolling here */
 #endif
+	cmdline_row = msg_row;
+
 	/* Avoid the sequence that the user types ":" at the hit-return prompt
 	 * to start an Ex command, but the file-changed dialog gets in the
 	 * way. */
@@ -2430,6 +2466,7 @@ msg_puts_printf(char_u *str, int maxlen)
     static int
 do_more_prompt(int typed_char)
 {
+    static int	entered = FALSE;
     int		used_typed_char = typed_char;
     int		oldState = State;
     int		c;
@@ -2440,6 +2477,13 @@ do_more_prompt(int typed_char)
     msgchunk_T	*mp_last = NULL;
     msgchunk_T	*mp;
     int		i;
+
+    /* We get called recursively when a timer callback outputs a message. In
+     * that case don't show another prompt. Also when at the hit-Enter prompt.
+     */
+    if (entered || State == HITRETURN)
+	return FALSE;
+    entered = TRUE;
 
     if (typed_char == 'G')
     {
@@ -2679,6 +2723,7 @@ do_more_prompt(int typed_char)
 	msg_col = Columns - 1;
 #endif
 
+    entered = FALSE;
 #ifdef FEAT_CON_DIALOG
     return retval;
 #else

@@ -212,6 +212,7 @@ json_encode_item(garray_T *gap, typval_T *val, int copyID, int options)
 	    break;
 
 	case VAR_FUNC:
+	case VAR_PARTIAL:
 	case VAR_JOB:
 	case VAR_CHANNEL:
 	    /* no JSON equivalent TODO: better error */
@@ -349,8 +350,10 @@ json_skip_white(js_read_T *reader)
 	if (reader->js_fill != NULL && c == NUL)
 	{
 	    if (reader->js_fill(reader))
+	    {
 		reader->js_end = reader->js_buf + STRLEN(reader->js_buf);
-	    continue;
+		continue;
+	    }
 	}
 	if (c == NUL || c > ' ')
 	    break;
@@ -506,6 +509,7 @@ json_decode_object(js_read_T *reader, typval_T *res, int options)
 		return FAIL;
 	    }
 	    di->di_tv = item;
+	    di->di_tv.v_lock = 0;
 	    if (dict_add(res->vval.v_dict, di) == FAIL)
 	    {
 		dictitem_free(di);
@@ -535,7 +539,6 @@ json_decode_string(js_read_T *reader, typval_T *res)
     char_u	*p;
     int		c;
     long	nr;
-    char_u	buf[NUMBUFLEN];
 
     if (res != NULL)
 	ga_init2(&ga, 1, 200);
@@ -613,6 +616,7 @@ json_decode_string(js_read_T *reader, typval_T *res)
 		    if (res != NULL)
 		    {
 #ifdef FEAT_MBYTE
+			char_u	buf[NUMBUFLEN];
 			buf[utf_char2bytes((int)nr, buf)] = NUL;
 			ga_concat(&ga, buf);
 #else
@@ -733,9 +737,9 @@ json_decode_item(js_read_T *reader, typval_T *res, int options)
 	default:
 	    if (VIM_ISDIGIT(*p) || *p == '-')
 	    {
+#ifdef FEAT_FLOAT
 		char_u  *sp = p;
 
-#ifdef FEAT_FLOAT
 		if (*sp == '-')
 		{
 		    ++sp;
@@ -875,8 +879,9 @@ json_decode_all(js_read_T *reader, typval_T *res, int options)
 /*
  * Decode the JSON from "reader" and store the result in "res".
  * "options" can be JSON_JS or zero;
- * Return FAIL if the message has a decoding error or the message is
- * truncated.  Consumes the message anyway.
+ * Return FAIL for a decoding error.
+ * Return MAYBE for an incomplete message.
+ * Consumes the message anyway.
  */
     int
 json_decode(js_read_T *reader, typval_T *res, int options)
@@ -889,7 +894,7 @@ json_decode(js_read_T *reader, typval_T *res, int options)
     ret = json_decode_item(reader, res, options);
     json_skip_white(reader);
 
-    return ret == OK ? OK : FAIL;
+    return ret;
 }
 
 /*

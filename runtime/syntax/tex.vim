@@ -1,8 +1,8 @@
 " Vim syntax file
 " Language:	TeX
 " Maintainer:	Charles E. Campbell <NdrchipO@ScampbellPfamily.AbizM>
-" Last Change:	Feb 18, 2016
-" Version:	92
+" Last Change:	May 02, 2016
+" Version:	95
 " URL:		http://www.drchip.org/astronaut/vim/index.html#SYNTAX_TEX
 "
 " Notes: {{{1
@@ -83,10 +83,14 @@ else
  let s:tex_conceal= g:tex_conceal
 endif
 if !exists("g:tex_superscripts")
- let g:tex_superscripts= "[0-9a-zA-W.,:;+-<>/()=]"
+ let s:tex_superscripts= "[0-9a-zA-W.,:;+-<>/()=]"
+else
+ let s:tex_superscripts= g:tex_superscripts
 endif
 if !exists("g:tex_subscripts")
- let g:tex_subscripts= "[0-9aehijklmnoprstuvx,+-/().]"
+ let s:tex_subscripts= "[0-9aehijklmnoprstuvx,+-/().]"
+else
+ let s:tex_subscripts= g:tex_subscripts
 endif
 
 " Determine whether or not to use "*.sty" mode {{{1
@@ -129,7 +133,7 @@ endif
 " g:tex_isk
 if exists("g:tex_isk")
  exe "setlocal isk=".g:tex_isk
-elseif !has("patch-7.4.1141")
+elseif !has("patch-7.4.1142")
  setl isk=48-57,a-z,A-Z,192-255
 else
  syn iskeyword 48-57,a-z,A-Z,192-255
@@ -296,7 +300,7 @@ syn match texTypeStyle		"\\sc\>"
 syn match texTypeStyle		"\\tt\>"
 
 " Type Styles: attributes, commands, families, etc (LaTeX2E): {{{1
-if s:tex_conceal !~ 'b'
+if s:tex_conceal !~# 'b'
  syn match texTypeStyle		"\\textbf\>"
  syn match texTypeStyle		"\\textit\>"
 endif
@@ -541,7 +545,7 @@ if !exists("g:tex_no_math")
  syn match texOnlyMath		"[_^]"
 endif
 syn match texSpecialChar	"\^\^[0-9a-f]\{2}\|\^\^\S"
-if s:tex_conceal !~ 'S'
+if s:tex_conceal !~# 'S'
  syn match texSpecialChar	'\\glq\>'	contained conceal cchar=‚
  syn match texSpecialChar	'\\grq\>'	contained conceal cchar=‘
  syn match texSpecialChar	'\\glqq\>'	contained conceal cchar=„
@@ -1049,7 +1053,7 @@ if has("conceal") && &enc == 'utf-8'
   endif
   " s:SuperSub:
   fun! s:SuperSub(group,leader,pat,cchar)
-    if a:pat =~# '^\\' || (a:leader == '\^' && a:pat =~# g:tex_superscripts) || (a:leader == '_' && a:pat =~# g:tex_subscripts)
+    if a:pat =~# '^\\' || (a:leader == '\^' && a:pat =~# s:tex_superscripts) || (a:leader == '_' && a:pat =~# s:tex_subscripts)
 "     call Decho("SuperSub: group<".a:group."> leader<".a:leader."> pat<".a:pat."> cchar<".a:cchar.">")
      exe 'syn match '.a:group." '".a:leader.a:pat."' contained conceal cchar=".a:cchar
      exe 'syn match '.a:group."s '".a:pat        ."' contained conceal cchar=".a:cchar.' nextgroup='.a:group.'s'

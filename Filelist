@@ -337,7 +337,6 @@ SRC_DOS =	\
 		src/vimio.h \
 		src/gvim.exe.mnf \
 		src/vimrun.c \
-		src/vimtbar.h \
 		src/xpm_w32.c \
 		src/xpm_w32.h \
 		src/xxd/Make_bc5.mak \
@@ -375,7 +374,6 @@ SRC_DOS_BIN =	\
 		src/tools.bmp \
 		src/vim*.ico \
 		src/vim.tlb \
-		src/vimtbar.lib \
 		src/xpm/COPYRIGHT \
 		src/xpm/README.txt \
 		src/xpm/include/*.h \
@@ -383,7 +381,6 @@ SRC_DOS_BIN =	\
 		src/xpm/x64/lib/libXpm.lib \
 		src/xpm/x86/lib/libXpm.a \
 		src/xpm/x86/lib/libXpm.lib \
-		src/vimtbar.dll \
 		nsis/icons/*.bmp \
 		nsis/icons/*.ico \
 
@@ -483,7 +480,6 @@ RT_ALL =	\
 		runtime/ftoff.vim \
 		runtime/gvimrc_example.vim \
 		runtime/macros/README.txt \
-		runtime/macros/dvorak \
 		runtime/macros/editexisting.vim \
 		runtime/macros/hanoi/click.me \
 		runtime/macros/hanoi/hanoi.vim \
@@ -495,7 +491,6 @@ RT_ALL =	\
 		runtime/macros/life/click.me \
 		runtime/macros/life/life.vim \
 		runtime/macros/matchit.vim \
-		runtime/macros/matchit.txt \
 		runtime/macros/maze/README.txt \
 		runtime/macros/maze/[mM]akefile \
 		runtime/macros/maze/main.aap \
@@ -525,6 +520,16 @@ RT_ALL =	\
 		runtime/tutor/tutor \
 		runtime/tutor/tutor.vim \
 		runtime/vimrc_example.vim \
+		runtime/pack/dist/opt/dvorak/plugin/dvorak.vim \
+		runtime/pack/dist/opt/dvorak/dvorak/enable.vim \
+		runtime/pack/dist/opt/dvorak/dvorak/disable.vim \
+		runtime/pack/dist/opt/editexisting/plugin/editexisting.vim \
+		runtime/pack/dist/opt/justify/plugin/justify.vim \
+		runtime/pack/dist/opt/matchit/plugin/matchit.vim \
+		runtime/pack/dist/opt/matchit/doc/matchit.txt \
+		runtime/pack/dist/opt/matchit/doc/tags \
+		runtime/pack/dist/opt/shellmenu/plugin/shellmenu.vim \
+		runtime/pack/dist/opt/swapmouse/plugin/swapmouse.vim \
 
 # runtime files for all distributions without CR-NL translation
 RT_ALL_BIN =	\
@@ -605,7 +610,6 @@ RT_AMI =	\
 		README.txt.info \
 		README_ami.txt \
 		README_ami.txt.info \
-		libs/arp.library \
 		runtime/doc.info \
 		runtime/doc/*.info \
 		runtime/icons/README.txt \
@@ -692,6 +696,35 @@ EXTRA =		\
 		src/tee/Makefile \
 		src/tee/Make_mvc.mak \
 		src/tee/tee.c \
+
+# files in READMEdir that are included from the top dir
+IN_README_DIR = \
+		README.txt.info \
+		README_ami.txt \
+		README_ami.txt.info \
+		README_amibin.txt \
+		README_amibin.txt.info \
+		README_amisrc.txt \
+		README_amisrc.txt.info \
+		README_bindos.txt \
+		README_dos.txt \
+		README_extra.txt \
+		README_mac.txt \
+		README_ole.txt \
+		README_os2.txt \
+		README_os390.txt \
+		README_src.txt \
+		README_srcdos.txt \
+		README_unix.txt \
+		README_vms.txt \
+		README_w32s.txt \
+		Contents \
+		Contents.info \
+		Vim.info \
+		Xxd.info \
+		runtime.info \
+		src.info \
+		vimdir.info \
 
 # generic language files
 LANG_GEN = \

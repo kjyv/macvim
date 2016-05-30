@@ -97,6 +97,7 @@
 /*
  * +windows		Multiple windows.  Without this there is no help
  *			window and no status lines.
+ * +vertsplit		Vertically split windows.
  */
 #ifdef FEAT_SMALL
 # define FEAT_WINDOWS
@@ -109,16 +110,6 @@
  */
 #ifdef FEAT_NORMAL
 # define FEAT_LISTCMDS
-#endif
-
-/*
- * +vertsplit		Vertically split windows.
- */
-#ifdef FEAT_NORMAL
-# define FEAT_VERTSPLIT
-#endif
-#if defined(FEAT_VERTSPLIT) && !defined(FEAT_WINDOWS)
-# define FEAT_WINDOWS
 #endif
 
 /*
@@ -144,8 +135,8 @@
 # define FEAT_JUMPLIST
 #endif
 
-/* the cmdline-window requires FEAT_VERTSPLIT and FEAT_CMDHIST */
-#if defined(FEAT_VERTSPLIT) && defined(FEAT_CMDHIST)
+/* the cmdline-window requires FEAT_WINDOWS and FEAT_CMDHIST */
+#if defined(FEAT_WINDOWS) && defined(FEAT_CMDHIST)
 # define FEAT_CMDWIN
 #endif
 
@@ -400,6 +391,13 @@
 #endif
 
 /*
+ * +timers		timer_start()
+ */
+#if defined(FEAT_RELTIME) && (defined(UNIX) || defined(WIN32))
+# define FEAT_TIMERS
+#endif
+
+/*
  * +textobjects		Text objects: "vaw", "das", etc.
  */
 #if defined(FEAT_NORMAL) && defined(FEAT_EVAL)
@@ -594,7 +592,7 @@
  * +mksession		":mksession" command.
  *			Requires +windows and +vertsplit.
  */
-#if defined(FEAT_NORMAL) && defined(FEAT_WINDOWS) && defined(FEAT_VERTSPLIT)
+#if defined(FEAT_NORMAL) && defined(FEAT_WINDOWS)
 # define FEAT_SESSION
 #endif
 
@@ -822,6 +820,13 @@
 # ifndef ALWAYS_USE_GUI
 #  define FEAT_CON_DIALOG
 # endif
+#endif
+
+/*
+ * +termguicolors	'termguicolors' option.
+ */
+#if (defined(FEAT_BIG) && defined(FEAT_SYN_HL)) && !defined(ALWAYS_USE_GUI)
+# define FEAT_TERMGUICOLORS
 #endif
 
 /* Mac specific thing: Codewarrior interface. */
@@ -1264,15 +1269,8 @@
 /*
  * The +channel feature requires +eval.
  */
-#if !defined(FEAT_EVAL) && defined(FEAT_CHANNEL)
-# undef FEAT_CHANNEL
-#endif
-
-/*
- * The +job feature requires +eval and Unix or MS-Windows.
- */
-#if (defined(UNIX) || defined(WIN32)) && defined(FEAT_EVAL)
-# define FEAT_JOB
+#if !defined(FEAT_EVAL) && defined(FEAT_JOB_CHANNEL)
+# undef FEAT_JOB_CHANNEL
 #endif
 
 /*

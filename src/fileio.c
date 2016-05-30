@@ -143,6 +143,18 @@ static void vim_settempdir(char_u *tempdir);
 static char *e_auchangedbuf = N_("E812: Autocommands changed buffer or buffer name");
 #endif
 
+#ifdef FEAT_AUTOCMD
+/*
+ * Set by the apply_autocmds_group function if the given event is equal to
+ * EVENT_FILETYPE. Used by the readfile function in order to determine if
+ * EVENT_BUFREADPOST triggered the EVENT_FILETYPE.
+ *
+ * Relying on this value requires one to reset it prior calling
+ * apply_autocmds_group.
+ */
+static int au_did_filetype INIT(= FALSE);
+#endif
+
     void
 filemess(
     buf_T	*buf,
@@ -303,6 +315,10 @@ readfile(
     char_u	*old_b_fname;
     int		using_b_ffname;
     int		using_b_fname;
+#endif
+
+#ifdef FEAT_AUTOCMD
+    au_did_filetype = FALSE; /* reset before triggering any autocommands */
 #endif
 
     curbuf->b_no_eol_lnum = 0;	/* in case it was set by the previous read */
@@ -2669,8 +2685,17 @@ failed:
 	    apply_autocmds_exarg(EVENT_FILTERREADPOST, NULL, sfname,
 							  FALSE, curbuf, eap);
 	else if (newfile)
+	{
 	    apply_autocmds_exarg(EVENT_BUFREADPOST, NULL, sfname,
 							  FALSE, curbuf, eap);
+	    if (!au_did_filetype && *curbuf->b_p_ft != NUL)
+		/*
+		 * EVENT_FILETYPE was not triggered but the buffer already has a
+		 * filetype. Trigger EVENT_FILETYPE using the existing filetype.
+		 */
+		apply_autocmds(EVENT_FILETYPE, curbuf->b_p_ft, curbuf->b_fname,
+			TRUE, curbuf);
+	}
 	else
 	    apply_autocmds_exarg(EVENT_FILEREADPOST, sfname, sfname,
 							    FALSE, NULL, eap);
@@ -5209,14 +5234,14 @@ msg_add_lines(
     if (insert_space)
 	*p++ = ' ';
     if (shortmess(SHM_LINES))
-	sprintf((char *)p,
 #ifdef LONG_LONG_OFF_T
-		"%ldL, %lldC", lnum, (long long)nchars
+	sprintf((char *)p,
+		"%ldL, %lldC", lnum, (long long)nchars);
 #else
+	sprintf((char *)p,
 		/* Explicit typecast avoids warning on Mac OS X 10.6 */
-		"%ldL, %ldC", lnum, (long)nchars
+		"%ldL, %ldC", lnum, (long)nchars);
 #endif
-		);
     else
     {
 	if (lnum == 1)
@@ -5227,14 +5252,14 @@ msg_add_lines(
 	if (nchars == 1)
 	    STRCPY(p, _("1 character"));
 	else
-	    sprintf((char *)p,
 #ifdef LONG_LONG_OFF_T
-		    _("%lld characters"), (long long)nchars
+	    sprintf((char *)p,
+		    _("%lld characters"), (long long)nchars);
 #else
+	    sprintf((char *)p,
 		    /* Explicit typecast avoids warning on Mac OS X 10.6 */
-		    _("%ld characters"), (long)nchars
+		    _("%ld characters"), (long)nchars);
 #endif
-		    );
     }
 }
 
@@ -9574,6 +9599,9 @@ BYPASS_AU:
      * are deleted. */
     if (event == EVENT_BUFWIPEOUT && buf != NULL)
 	aubuflocal_remove(buf);
+
+    if (retval == OK && event == EVENT_FILETYPE)
+	au_did_filetype = TRUE;
 
     return retval;
 }

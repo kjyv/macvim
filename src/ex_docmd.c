@@ -2020,7 +2020,7 @@ do_one_cmd(
 
 	    case 'v':	if (checkforcmd(&ea.cmd, "vertical", 4))
 			{
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 			    cmdmod.split |= WSP_VERT;
 #endif
 			    continue;
@@ -4208,6 +4208,11 @@ set_one_cmd_context(
 	    xp->xp_pattern = arg;
 	    break;
 
+	case CMD_packadd:
+	    xp->xp_context = EXPAND_PACKADD;
+	    xp->xp_pattern = arg;
+	    break;
+
 #if (defined(HAVE_LOCALE_H) || defined(X_LOCALE)) \
 	&& (defined(FEAT_GETTEXT) || defined(FEAT_MBYTE))
 	case CMD_language:
@@ -5863,6 +5868,7 @@ static struct
     {EXPAND_SYNTIME, "syntime"},
 #endif
     {EXPAND_SETTINGS, "option"},
+    {EXPAND_PACKADD, "packadd"},
     {EXPAND_SHELLCMD, "shellcmd"},
 #if defined(FEAT_SIGNS)
     {EXPAND_SIGN, "sign"},
@@ -7935,14 +7941,6 @@ ex_splitview(exarg_T *eap)
     int		browse_flag = cmdmod.browse;
 # endif
 
-# ifndef FEAT_VERTSPLIT
-    if (eap->cmdidx == CMD_vsplit || eap->cmdidx == CMD_vnew)
-    {
-	ex_ni(eap);
-	return;
-    }
-# endif
-
 # ifdef FEAT_GUI
     need_mouse_correct = TRUE;
 # endif
@@ -7954,10 +7952,8 @@ ex_splitview(exarg_T *eap)
     {
 	if (eap->cmdidx == CMD_split)
 	    eap->cmdidx = CMD_new;
-#  ifdef FEAT_VERTSPLIT
 	if (eap->cmdidx == CMD_vsplit)
 	    eap->cmdidx = CMD_vnew;
-#  endif
     }
 # endif
 
@@ -7976,9 +7972,7 @@ ex_splitview(exarg_T *eap)
 # endif
 # ifdef FEAT_BROWSE
     if (cmdmod.browse
-#  ifdef FEAT_VERTSPLIT
 	    && eap->cmdidx != CMD_vnew
-# endif
 	    && eap->cmdidx != CMD_new)
     {
 # ifdef FEAT_AUTOCMD
@@ -8236,11 +8230,10 @@ ex_resize(exarg_T *eap)
 	    ;
     }
 
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
     need_mouse_correct = TRUE;
-#endif
+# endif
     n = atol((char *)eap->arg);
-#ifdef FEAT_VERTSPLIT
     if (cmdmod.split & WSP_VERT)
     {
 	if (*eap->arg == '-' || *eap->arg == '+')
@@ -8250,7 +8243,6 @@ ex_resize(exarg_T *eap)
 	win_setwidth_win((int)n, wp);
     }
     else
-#endif
     {
 	if (*eap->arg == '-' || *eap->arg == '+')
 	    n += curwin->w_height;
@@ -8409,7 +8401,7 @@ do_exedit(
     if ((eap->cmdidx == CMD_new
 		|| eap->cmdidx == CMD_tabnew
 		|| eap->cmdidx == CMD_tabedit
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 		|| eap->cmdidx == CMD_vnew
 #endif
 		) && *eap->arg == NUL)
@@ -8421,7 +8413,7 @@ do_exedit(
 		      old_curwin == NULL ? curwin : NULL);
     }
     else if ((eap->cmdidx != CMD_split
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 		&& eap->cmdidx != CMD_vsplit
 #endif
 		)
@@ -8907,12 +8899,22 @@ ex_sleep(exarg_T *eap)
 do_sleep(long msec)
 {
     long	done;
+    long	wait_now;
 
     cursor_on();
     out_flush();
-    for (done = 0; !got_int && done < msec; done += 1000L)
+    for (done = 0; !got_int && done < msec; done += wait_now)
     {
-	ui_delay(msec - done > 1000L ? 1000L : msec - done, TRUE);
+	wait_now = msec - done > 1000L ? 1000L : msec - done;
+#ifdef FEAT_TIMERS
+	{
+	    long    due_time = check_due_timer();
+
+	    if (due_time > 0 && due_time < wait_now)
+		wait_now = due_time;
+	}
+#endif
+	ui_delay(wait_now, TRUE);
 	ui_breakcheck();
 #ifdef MESSAGE_QUEUE
 	/* Process the netbeans and clientserver messages that may have been
@@ -9281,7 +9283,7 @@ ex_bang(exarg_T *eap)
  * ":undo".
  */
     static void
-ex_undo(exarg_T *eap UNUSED)
+ex_undo(exarg_T *eap)
 {
     if (eap->addr_count == 1)	    /* :undo 123 */
 	undo_time(eap->line2, FALSE, FALSE, TRUE);
@@ -9786,7 +9788,7 @@ theend:
 #if ((defined(FEAT_SESSION) || defined(FEAT_EVAL)) && defined(vim_mkdir)) \
 	|| defined(PROTO)
     int
-vim_mkdir_emsg(char_u *name, int prot UNUSED)
+vim_mkdir_emsg(char_u *name, int prot)
 {
     if (vim_mkdir(name, prot) != 0)
     {
@@ -10065,6 +10067,7 @@ ex_stopinsert(exarg_T *eap UNUSED)
 {
     restart_edit = 0;
     stop_insert_mode = TRUE;
+    clearmode();
 }
 
 /*
@@ -11806,16 +11809,16 @@ ex_filetype(exarg_T *eap)
     {
 	if (*arg == 'o' || !filetype_detect)
 	{
-	    source_runtime((char_u *)FILETYPE_FILE, TRUE);
+	    source_runtime((char_u *)FILETYPE_FILE, DIP_ALL);
 	    filetype_detect = TRUE;
 	    if (plugin)
 	    {
-		source_runtime((char_u *)FTPLUGIN_FILE, TRUE);
+		source_runtime((char_u *)FTPLUGIN_FILE, DIP_ALL);
 		filetype_plugin = TRUE;
 	    }
 	    if (indent)
 	    {
-		source_runtime((char_u *)INDENT_FILE, TRUE);
+		source_runtime((char_u *)INDENT_FILE, DIP_ALL);
 		filetype_indent = TRUE;
 	    }
 	}
@@ -11831,18 +11834,18 @@ ex_filetype(exarg_T *eap)
 	{
 	    if (plugin)
 	    {
-		source_runtime((char_u *)FTPLUGOF_FILE, TRUE);
+		source_runtime((char_u *)FTPLUGOF_FILE, DIP_ALL);
 		filetype_plugin = FALSE;
 	    }
 	    if (indent)
 	    {
-		source_runtime((char_u *)INDOFF_FILE, TRUE);
+		source_runtime((char_u *)INDOFF_FILE, DIP_ALL);
 		filetype_indent = FALSE;
 	    }
 	}
 	else
 	{
-	    source_runtime((char_u *)FTOFF_FILE, TRUE);
+	    source_runtime((char_u *)FTOFF_FILE, DIP_ALL);
 	    filetype_detect = FALSE;
 	}
     }

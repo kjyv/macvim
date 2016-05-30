@@ -130,6 +130,7 @@
 #		make installlinks	only installs the Vim binary links
 #		make installmanlinks	only installs the Vim manpage links
 #		make installmacros	only installs the Vim macros
+#		make installpack	only installs the packages
 #		make installtutorbin	only installs the Vim tutor program
 #		make installtutor	only installs the Vim tutor files
 #		make installspell	only installs the spell files
@@ -424,7 +425,7 @@ CClink = $(CC)
 # NOTE: This may cause threading to be enabled, which has side effects (such
 # as using different libraries and debugging becomes more difficult).
 # NOTE: Using this together with Perl may cause a crash in initialization.
-# For Python3 support make a symbolic link in /usr/local/bin: 
+# For Python3 support make a symbolic link in /usr/local/bin:
 #	ln -s python3 python3.1
 # If both python2.x and python3.x are enabled then the linking will be via
 # dlopen(), dlsym(), dlclose(), i.e. pythonX.Y.so must be available
@@ -1008,6 +1009,7 @@ LANGSUBDIR = /lang
 COMPSUBDIR = /compiler
 KMAPSUBDIR = /keymap
 MACROSUBDIR = /macros
+PACKSUBDIR = /pack
 TOOLSSUBDIR = /tools
 TUTORSUBDIR = /tutor
 SPELLSUBDIR = /spell
@@ -1029,6 +1031,7 @@ PODIR = po
 ### COMPSUBLOC	location for compiler files
 ### KMAPSUBLOC	location for keymap files
 ### MACROSUBLOC	location for macro files
+### PACKSUBLOC	location for packages
 ### TOOLSSUBLOC	location for tools files
 ### TUTORSUBLOC	location for tutor files
 ### SPELLSUBLOC	location for spell files
@@ -1050,6 +1053,7 @@ LANGSUBLOC	= $(VIMRTLOC)$(LANGSUBDIR)
 COMPSUBLOC	= $(VIMRTLOC)$(COMPSUBDIR)
 KMAPSUBLOC	= $(VIMRTLOC)$(KMAPSUBDIR)
 MACROSUBLOC	= $(VIMRTLOC)$(MACROSUBDIR)
+PACKSUBLOC	= $(VIMRTLOC)$(PACKSUBDIR)
 TOOLSSUBLOC	= $(VIMRTLOC)$(TOOLSSUBDIR)
 TUTORSUBLOC	= $(VIMRTLOC)$(TUTORSUBDIR)
 SPELLSUBLOC	= $(VIMRTLOC)$(SPELLSUBDIR)
@@ -1071,6 +1075,9 @@ SYS_DELMENU_FILE = $(DESTDIR)$(SCRIPTLOC)/delmenu.vim
 
 ### Name of the bugreport file target.
 SYS_BUGR_FILE	= $(DESTDIR)$(SCRIPTLOC)/bugreport.vim
+
+### Name of the rgb.txt file target.
+SYS_RGB_FILE   = $(DESTDIR)$(SCRIPTLOC)/rgb.txt
 
 ### Name of the file type detection file target.
 SYS_FILETYPE_FILE = $(DESTDIR)$(SCRIPTLOC)/filetype.vim
@@ -1154,6 +1161,9 @@ FTPLUGSOURCE = ../runtime/ftplugin
 
 # Where to copy the macro files from
 MACROSOURCE = ../runtime/macros
+
+# Where to copy the package files from
+PACKSOURCE = ../runtime/pack
 
 # Where to copy the tools files from
 TOOLSSOURCE = ../runtime/tools
@@ -1447,6 +1457,7 @@ DEST_LANG = $(DESTDIR)$(LANGSUBLOC)
 DEST_COMP = $(DESTDIR)$(COMPSUBLOC)
 DEST_KMAP = $(DESTDIR)$(KMAPSUBLOC)
 DEST_MACRO = $(DESTDIR)$(MACROSUBLOC)
+DEST_PACK = $(DESTDIR)$(PACKSUBLOC)
 DEST_TOOLS = $(DESTDIR)$(TOOLSSUBLOC)
 DEST_TUTOR = $(DESTDIR)$(TUTORSUBLOC)
 DEST_SPELL = $(DESTDIR)$(SPELLSUBLOC)
@@ -1986,10 +1997,8 @@ test1 \
 	test_listlbr_utf8 \
 	test_mapping \
 	test_marks \
-	test_match_conceal \
 	test_nested_function \
 	test_options \
-	test_qf_title \
 	test_ruby \
 	test_search_mbyte \
 	test_signs \
@@ -1999,7 +2008,7 @@ test1 \
 	test_wordcount \
 	test_writefile \
 	test2 test3 test4 test5 test6 test7 test8 test9 \
-	test10 test11 test12 test13 test14 test15 test16 test17 test18 test19 \
+	test11 test12 test13 test14 test15 test16 test17 test18 test19 \
 	test20 test21 test22 test23 test24 test25 test26 test27 test28 test29 \
 	test30 test31 test32 test33 test34 test35 test36 test37 test38 test39 \
 	test40 test41 test42 test43 test44 test45 test46 test47 test48 test49 \
@@ -2007,37 +2016,67 @@ test1 \
 	test60 test61 test62 test63 test64 test65 test66 test67 test68 test69 \
 	test70 test71 test72 test73 test74 test75 test76 test77 test78 test79 \
 	test80 test81 test82 test83 test84 test85 test86 test87 test88 test89 \
-	test90 test91 test92 test93 test94 test95 test96 test97 test98 test99 \
-	test100 test101 test102 test103 test104 test105 test106 test107 test108:
+	test90 test91 test92 test93 test94 test95 test97 test98 test99 \
+	test100 test101 test102 test103 test104 test107 test108:
 	cd testdir; rm -f $@.out; $(MAKE) -f Makefile $@.out VIMPROG=../$(VIMTARGET) $(GUI_TESTARG) SCRIPTSOURCE=../$(SCRIPTSOURCE)
 
 # Run individual NEW style test, assuming that Vim was already compiled.
 test_arglist \
 	test_assert \
+	test_assign \
+	test_autocmd \
 	test_backspace_opt \
 	test_cdo \
 	test_channel \
 	test_cursor_func \
 	test_delete \
+	test_ex_undo \
 	test_expand \
+	test_expand_dllpath \
+	test_expr \
+	test_expr_utf8 \
+	test_feedkeys \
+	test_file_perm \
+	test_fnamemodify \
 	test_glob2regpat \
+	test_goto \
 	test_hardcopy \
+	test_help_tagjump \
+	test_history \
 	test_increment \
+	test_join \
 	test_json \
 	test_langmap \
 	test_lispwords \
+	test_matchadd_conceal \
+	test_matchadd_conceal_utf8 \
+	test_matchstrpos \
 	test_menu \
+	test_messages \
+	test_packadd \
+	test_partial \
 	test_perl \
 	test_quickfix \
+	test_regexp_latin \
+	test_regexp_utf8 \
 	test_reltime \
 	test_searchpos \
 	test_set \
 	test_sort \
+	test_statusline \
+	test_syn_attr \
 	test_syntax \
+	test_tabline \
+	test_tagjump \
+	test_timers \
 	test_undolevels \
 	test_unlet \
 	test_viminfo \
 	test_viml \
+	test_visual \
+	test_window_id \
+	test_alot_latin \
+	test_alot_utf8 \
 	test_alot:
 	cd testdir; rm -f $@.res test.log messages; $(MAKE) -f Makefile $@.res VIMPROG=../$(VIMTARGET) $(GUI_TESTARG) SCRIPTSOURCE=../$(SCRIPTSOURCE)
 	@if test -f testdir/test.log; then \
@@ -2111,7 +2150,7 @@ INSTALLMANARGS = $(VIMLOC) $(SCRIPTLOC) $(VIMRCLOC) $(HELPSOURCE) $(MANMOD) \
 		$(VIMNAME) $(VIMDIFFNAME) $(EVIMNAME)
 
 # Install most of the runtime files
-installruntime: installrtbase installmacros installtutor installspell
+installruntime: installrtbase installmacros installpack installtutor installspell
 
 # install the help files; first adjust the contents for the final location
 installrtbase: $(HELPSOURCE)/vim.1 $(DEST_VIM) $(DEST_RT) \
@@ -2119,9 +2158,14 @@ installrtbase: $(HELPSOURCE)/vim.1 $(DEST_VIM) $(DEST_RT) \
 		$(DEST_FTP) $(DEST_AUTO) $(DEST_AUTO)/xml $(DEST_PLUG) \
 		$(DEST_TUTOR) $(DEST_SPELL) $(DEST_COMP)
 	-$(SHELL) ./installman.sh install $(DEST_MAN) "" $(INSTALLMANARGS)
-	@echo generating help tags
 # Generate the help tags with ":helptags" to handle all languages.
-	-@cd $(HELPSOURCE); $(MAKE) VIMEXE=$(DEST_BIN)/$(VIMTARGET) vimtags
+# Move the distributed tags file aside and restore it, to avoid it being
+# different from the repository.
+	cd $(HELPSOURCE); if test -z "$(CROSS_COMPILING)" -a -f tags; then \
+		mv -f tags tags.dist; fi
+	@echo generating help tags
+	-@cd $(HELPSOURCE); if test -z "$(CROSS_COMPILING)"; then \
+		$(MAKE) VIMEXE=$(DEST_BIN)/$(VIMTARGET) vimtags; fi
 	cd $(HELPSOURCE); \
 		files=`ls *.txt tags`; \
 		files="$$files `ls *.??x tags-?? 2>/dev/null || true`"; \
@@ -2130,6 +2174,7 @@ installrtbase: $(HELPSOURCE)/vim.1 $(DEST_VIM) $(DEST_RT) \
 		chmod $(HELPMOD) $$files
 	$(INSTALL_DATA)  $(HELPSOURCE)/*.pl $(DEST_HELP)
 	chmod $(SCRIPTMOD) $(DEST_HELP)/*.pl
+	cd $(HELPSOURCE); if test -f tags.dist; then mv -f tags.dist tags; fi
 # install the menu files
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/menu.vim $(SYS_MENU_FILE)
 	chmod $(VIMSCRIPTMOD) $(SYS_MENU_FILE)
@@ -2142,6 +2187,9 @@ installrtbase: $(HELPSOURCE)/vim.1 $(DEST_VIM) $(DEST_RT) \
 	chmod $(VIMSCRIPTMOD) $(MSWIN_FILE)
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/evim.vim $(EVIM_FILE)
 	chmod $(VIMSCRIPTMOD) $(EVIM_FILE)
+# install the rgb.txt file
+	$(INSTALL_DATA) $(SCRIPTSOURCE)/rgb.txt $(SYS_RGB_FILE)
+	chmod $(VIMSCRIPTMOD) $(SYS_RGB_FILE)
 # install the bugreport file
 	$(INSTALL_DATA) $(SCRIPTSOURCE)/bugreport.vim $(SYS_BUGR_FILE)
 	chmod $(VIMSCRIPTMOD) $(SYS_BUGR_FILE)
@@ -2205,6 +2253,11 @@ installmacros: $(DEST_VIM) $(DEST_RT) $(DEST_MACRO)
 	      if test -n "$$cvs"; then \
 		 rm -rf $$cvs; \
 	      fi
+
+installpack: $(DEST_VIM) $(DEST_RT) $(DEST_PACK)
+	$(INSTALL_DATA_R) $(PACKSOURCE)/* $(DEST_PACK)
+	chmod $(DIRMOD) `find $(DEST_PACK) -type d -print`
+	chmod $(FILEMOD) `find $(DEST_PACK) -type f -print`
 
 # install the tutor files
 installtutorbin: $(DEST_VIM)
@@ -2326,12 +2379,18 @@ install-languages: languages $(DEST_LANG) $(DEST_KMAP)
 ICON48PATH = $(DESTDIR)$(DATADIR)/icons/hicolor/48x48/apps
 ICON32PATH = $(DESTDIR)$(DATADIR)/icons/locolor/32x32/apps
 ICON16PATH = $(DESTDIR)$(DATADIR)/icons/locolor/16x16/apps
+ICONTHEMEPATH = $(DATADIR)/icons/hicolor
 DESKTOPPATH = $(DESTDIR)$(DATADIR)/applications
 KDEPATH = $(HOME)/.kde/share/icons
 install-icons:
 	if test -d $(ICON48PATH) -a -w $(ICON48PATH) \
 		-a ! -f $(ICON48PATH)/gvim.png; then \
 	   $(INSTALL_DATA) $(SCRIPTSOURCE)/vim48x48.png $(ICON48PATH)/gvim.png; \
+	   if test -z "$(DESTDIR)" -a -x "$(GTK_UPDATE_ICON_CACHE)" \
+		   -a -w $(ICONTHEMEPATH) \
+		   -a -f $(ICONTHEMEPATH)/index.theme; then \
+		$(GTK_UPDATE_ICON_CACHE) -q $(ICONTHEMEPATH); \
+	   fi \
 	fi
 	if test -d $(ICON32PATH) -a -w $(ICON32PATH) \
 		-a ! -f $(ICON32PATH)/gvim.png; then \
@@ -2345,6 +2404,9 @@ install-icons:
 	   $(INSTALL_DATA) $(SCRIPTSOURCE)/vim.desktop \
 		$(SCRIPTSOURCE)/gvim.desktop \
 		$(DESKTOPPATH); \
+	   if test -z "$(DESTDIR)" -a -x "$(UPDATE_DESKTOP_DATABASE)"; then \
+	      $(UPDATE_DESKTOP_DATABASE) -q $(DESKTOPPATH); \
+	   fi \
 	fi
 
 $(HELPSOURCE)/vim.1 $(MACROSOURCE) $(TOOLSSOURCE):
@@ -2355,8 +2417,8 @@ $(HELPSOURCE)/vim.1 $(MACROSOURCE) $(TOOLSSOURCE):
 $(DESTDIR)$(exec_prefix) $(DEST_BIN) \
 		$(DEST_VIM) $(DEST_RT) $(DEST_HELP) \
 		$(DEST_PRINT) $(DEST_COL) $(DEST_SYN) $(DEST_IND) $(DEST_FTP) \
-		$(DEST_LANG) $(DEST_KMAP) $(DEST_COMP) \
-		$(DEST_MACRO) $(DEST_TOOLS) $(DEST_TUTOR) $(DEST_SPELL) \
+		$(DEST_LANG) $(DEST_KMAP) $(DEST_COMP) $(DEST_MACRO) \
+		$(DEST_PACK) $(DEST_TOOLS) $(DEST_TUTOR) $(DEST_SPELL) \
 		$(DEST_AUTO) $(DEST_AUTO)/xml $(DEST_PLUG):
 	-$(SHELL) ./mkinstalldirs $@
 	-chmod $(DIRMOD) $@
@@ -2490,6 +2552,7 @@ uninstall_runtime:
 	-rm -f $(DEST_MAN_RU)/xxd.1 $(DEST_MAN_RU_U)/xxd.1
 	-rm -f $(DEST_HELP)/*.txt $(DEST_HELP)/tags $(DEST_HELP)/*.pl
 	-rm -f $(DEST_HELP)/*.??x $(DEST_HELP)/tags-??
+	-rm -f $(SYS_RGB_FILE)
 	-rm -f $(SYS_MENU_FILE) $(SYS_SYNMENU_FILE) $(SYS_DELMENU_FILE)
 	-rm -f $(SYS_BUGR_FILE) $(EVIM_FILE) $(MSWIN_FILE)
 	-rm -f $(DEST_SCRIPT)/gvimrc_example.vim $(DEST_SCRIPT)/vimrc_example.vim
@@ -2501,6 +2564,7 @@ uninstall_runtime:
 	-rm -f $(DEST_SYN)/*.vim $(DEST_SYN)/README.txt
 	-rm -f $(DEST_IND)/*.vim $(DEST_IND)/README.txt
 	-rm -rf $(DEST_MACRO)
+	-rm -rf $(DEST_PACK)
 	-rm -rf $(DEST_TUTOR)
 	-rm -rf $(DEST_SPELL)
 	-rm -rf $(DEST_TOOLS)
@@ -2561,6 +2625,7 @@ shadow:	runtime pixmaps
 				 ../../testdir/*.py \
 				 ../../testdir/python* \
 				 ../../testdir/sautest \
+				 ../../testdir/samples \
 				 ../../testdir/test83-tags? \
 				 ../../testdir/*.ok .
 

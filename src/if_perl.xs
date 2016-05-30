@@ -52,13 +52,14 @@
 #ifdef __GNUC__
 # pragma GCC diagnostic push
 # pragma GCC diagnostic ignored "-Wunused-variable"
-# pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
 #endif
 
 #include <EXTERN.h>
 #include <perl.h>
 #include <XSUB.h>
-
+#if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+# include <perliol.h>
+#endif
 
 /*
  * Work around clashes between Perl and Vim namespace.	proto.h doesn't
@@ -294,6 +295,13 @@ typedef int perl_key;
 # define Perl_av_fetch dll_Perl_av_fetch
 # define Perl_av_len dll_Perl_av_len
 # define Perl_sv_2nv_flags dll_Perl_sv_2nv_flags
+# if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+#  define PerlIOBase_pushed dll_PerlIOBase_pushed
+#  define PerlIO_define_layer dll_PerlIO_define_layer
+# endif
+# if (PERL_REVISION == 5) && (PERL_VERSION >= 24)
+#  define Perl_savetmps dll_Perl_savetmps
+# endif
 
 /*
  * Declare HANDLE for perl.dll and function pointers.
@@ -307,16 +315,18 @@ static void (*perl_free)(PerlInterpreter*);
 static int (*perl_run)(PerlInterpreter*);
 static int (*perl_parse)(PerlInterpreter*, XSINIT_t, int, char**, char**);
 static void* (*Perl_get_context)(void);
-static void (*Perl_croak)(pTHX_ const char*, ...);
+static void (*Perl_croak)(pTHX_ const char*, ...) __attribute__noreturn__;
 #ifdef PERL5101_OR_LATER
 /* Perl-5.18 has a different Perl_croak_xs_usage signature. */
 # if (PERL_REVISION == 5) && (PERL_VERSION >= 18)
-static void (*Perl_croak_xs_usage)(const CV *const, const char *const params);
+static void (*Perl_croak_xs_usage)(const CV *const, const char *const params)
+						    __attribute__noreturn__;
 # else
-static void (*Perl_croak_xs_usage)(pTHX_ const CV *const, const char *const params);
+static void (*Perl_croak_xs_usage)(pTHX_ const CV *const, const char *const params)
+						    __attribute__noreturn__;
 # endif
 #endif
-static void (*Perl_croak_nocontext)(const char*, ...);
+static void (*Perl_croak_nocontext)(const char*, ...) __attribute__noreturn__;
 static I32 (*Perl_dowantarray)(pTHX);
 static void (*Perl_free_tmps)(pTHX);
 static HV* (*Perl_gv_stashpv)(pTHX_ const char*, I32);
@@ -444,6 +454,13 @@ static SV * (*Perl_hv_iterval)(pTHX_ HV *, HE *);
 static SV** (*Perl_av_fetch)(pTHX_ AV *, SSize_t, I32);
 static SSize_t (*Perl_av_len)(pTHX_ AV *);
 static NV (*Perl_sv_2nv_flags)(pTHX_ SV *const, const I32);
+#if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+static IV (*PerlIOBase_pushed)(pTHX_ PerlIO *, const char *, SV *, PerlIO_funcs *);
+static void (*PerlIO_define_layer)(pTHX_ PerlIO_funcs *);
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 24)
+static void (*Perl_savetmps)(pTHX);
+#endif
 
 /*
  * Table of name to function pointer of perl.
@@ -583,15 +600,31 @@ static struct {
     {"Perl_av_fetch", (PERL_PROC*)&Perl_av_fetch},
     {"Perl_av_len", (PERL_PROC*)&Perl_av_len},
     {"Perl_sv_2nv_flags", (PERL_PROC*)&Perl_sv_2nv_flags},
+#if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+    {"PerlIOBase_pushed", (PERL_PROC*)&PerlIOBase_pushed},
+    {"PerlIO_define_layer", (PERL_PROC*)&PerlIO_define_layer},
+#endif
+#if (PERL_REVISION == 5) && (PERL_VERSION >= 24)
+    {"Perl_savetmps", (PERL_PROC*)&Perl_savetmps},
+#endif
     {"", NULL},
 };
 
 /* Work around for perl-5.18.
- * The definitions of S_SvREFCNT_inc and S_SvREFCNT_dec are needed, so include
- * "perl\lib\CORE\inline.h", after Perl_sv_free2 is defined.
- * The linker won't complain about undefined __impl_Perl_sv_free2. */
+ * For now, only the definitions of S_SvREFCNT_dec are needed in
+ * "perl\lib\CORE\inline.h". */
 #if (PERL_REVISION == 5) && (PERL_VERSION >= 18)
-# include <inline.h>
+static void
+S_SvREFCNT_dec(pTHX_ SV *sv)
+{
+    if (LIKELY(sv != NULL)) {
+	U32 rc = SvREFCNT(sv);
+	if (LIKELY(rc > 1))
+	    SvREFCNT(sv) = rc - 1;
+	else
+	    Perl_sv_free2(aTHX_ sv, rc);
+    }
+}
 #endif
 
 /*
@@ -643,6 +676,10 @@ perl_enabled(int verbose)
 }
 #endif /* DYNAMIC_PERL */
 
+#if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+static void vim_IOLayer_init(void);
+#endif
+
 /*
  * perl_init(): initialize perl interpreter
  * We have to call perl_parse to initialize some structures,
@@ -668,6 +705,8 @@ perl_init(void)
     sfdisc(PerlIO_stderr(), sfdcnewvim());
     sfsetbuf(PerlIO_stdout(), NULL, 0);
     sfsetbuf(PerlIO_stderr(), NULL, 0);
+#elif defined(PERLIO_LAYERS)
+    vim_IOLayer_init();
 #endif
 }
 
@@ -754,7 +793,7 @@ newWINrv(SV *rv, win_T *ptr)
 	sv_setiv(ptr->w_perl_private, PTR2IV(ptr));
     }
     else
-	SvREFCNT_inc(ptr->w_perl_private);
+	SvREFCNT_inc_void_NN(ptr->w_perl_private);
     SvRV(rv) = ptr->w_perl_private;
     SvROK_on(rv);
     return sv_bless(rv, gv_stashpv("VIWIN", TRUE));
@@ -770,7 +809,7 @@ newBUFrv(SV *rv, buf_T *ptr)
 	sv_setiv(ptr->b_perl_private, PTR2IV(ptr));
     }
     else
-	SvREFCNT_inc(ptr->b_perl_private);
+	SvREFCNT_inc_void_NN(ptr->b_perl_private);
     SvRV(rv) = ptr->b_perl_private;
     SvROK_on(rv);
     return sv_bless(rv, gv_stashpv("VIBUF", TRUE));
@@ -821,6 +860,7 @@ I32 cur_val(IV iv, SV *sv)
     else
 	rv = newBUFrv(newSV(0), curbuf);
     sv_setsv(sv, rv);
+    SvREFCNT_dec(SvRV(rv));
     return 0;
 }
 #endif /* !PROTO */
@@ -1304,6 +1344,82 @@ err:
     }
 }
 
+#if defined(PERLIO_LAYERS) && !defined(USE_SFIO)
+typedef struct {
+    struct _PerlIO base;
+    int attr;
+} PerlIOVim;
+
+    static IV
+PerlIOVim_pushed(pTHX_ PerlIO *f, const char *mode,
+		 SV *arg, PerlIO_funcs *tab)
+{
+    PerlIOVim *s = PerlIOSelf(f, PerlIOVim);
+    s->attr = 0;
+    if (arg && SvPOK(arg)) {
+	int id = syn_name2id((char_u *)SvPV_nolen(arg));
+	if (id != 0)
+	    s->attr = syn_id2attr(id);
+    }
+    return PerlIOBase_pushed(aTHX_ f, mode, (SV *)NULL, tab);
+}
+
+    static SSize_t
+PerlIOVim_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
+{
+    char_u *str;
+    PerlIOVim * s = PerlIOSelf(f, PerlIOVim);
+
+    str = vim_strnsave((char_u *)vbuf, count);
+    if (str == NULL)
+	return 0;
+    msg_split((char_u *)str, s->attr);
+    vim_free(str);
+
+    return count;
+}
+
+static PERLIO_FUNCS_DECL(PerlIO_Vim) = {
+    sizeof(PerlIO_funcs),
+    "Vim",
+    sizeof(PerlIOVim),
+    PERLIO_K_DUMMY,	/* flags */
+    PerlIOVim_pushed,
+    NULL,		/* popped */
+    NULL,		/* open */
+    NULL,		/* binmode */
+    NULL,		/* arg */
+    NULL,		/* fileno */
+    NULL,		/* dup */
+    NULL,		/* read */
+    NULL,		/* unread */
+    PerlIOVim_write,
+    NULL,		/* seek */
+    NULL,		/* tell */
+    NULL,		/* close */
+    NULL,		/* flush */
+    NULL,		/* fill */
+    NULL,		/* eof */
+    NULL,		/* error */
+    NULL,		/* clearerr */
+    NULL,		/* setlinebuf */
+    NULL,		/* get_base */
+    NULL,		/* get_bufsiz */
+    NULL,		/* get_ptr */
+    NULL,		/* get_cnt */
+    NULL		/* set_ptrcnt */
+};
+
+/* Use Vim routine for print operator */
+    static void
+vim_IOLayer_init(void)
+{
+    PerlIO_define_layer(aTHX_ PERLIO_FUNCS_CAST(&PerlIO_Vim));
+    (void)eval_pv(   "binmode(STDOUT, ':Vim')"
+                "  && binmode(STDERR, ':Vim(ErrorMsg)');", 0);
+}
+#endif /* PERLIO_LAYERS && !USE_SFIO */
+
 #ifndef FEAT_WINDOWS
     int
 win_valid(win_T *w)
@@ -1516,7 +1632,8 @@ SetHeight(win, height)
     curwin = savewin;
 
 void
-Cursor(VIWIN win, ...)
+Cursor(win, ...)
+    VIWIN win
 
     PPCODE:
     if (items == 1)

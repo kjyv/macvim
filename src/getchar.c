@@ -1523,7 +1523,7 @@ before_blocking(void)
     updatescript(0);
 #ifdef FEAT_EVAL
     if (may_garbage_collect)
-	garbage_collect();
+	garbage_collect(FALSE);
 #endif
 }
 
@@ -1571,7 +1571,7 @@ vgetc(void)
     /* Do garbage collection when garbagecollect() was called previously and
      * we are now at the toplevel. */
     if (may_garbage_collect && want_garbage_collect)
-	garbage_collect();
+	garbage_collect(FALSE);
 #endif
 
     /*
@@ -1880,7 +1880,7 @@ char_avail(void)
     int	    retval;
 
 #ifdef FEAT_EVAL
-    /* When disable_char_avail_for_testing(1) was called pretend there is no
+    /* When test_disable_char_avail(1) was called pretend there is no
      * typeahead. */
     if (disable_char_avail_for_testing)
 	return FALSE;

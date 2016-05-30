@@ -617,9 +617,9 @@ visibility_event(GtkWidget *widget UNUSED,
  */
 #if GTK_CHECK_VERSION(3,0,0)
 static gboolean is_key_pressed = FALSE;
+static gboolean blink_mode = TRUE;
 
 static gboolean gui_gtk_is_blink_on(void);
-static gboolean gui_gtk_is_no_blink(void);
 static void gui_gtk_window_clear(GdkWindow *win);
 
     static void
@@ -636,7 +636,10 @@ gui_gtk3_update_cursor(cairo_t *cr)
     if (gui.row == gui.cursor_row)
     {
 	gui.by_signal = TRUE;
-	gui_update_cursor(TRUE, TRUE);
+	if (State & CMDLINE)
+	    gui_update_cursor(TRUE, FALSE);
+	else
+	    gui_update_cursor(TRUE, TRUE);
 	gui.by_signal = FALSE;
 	cairo_paint(cr);
     }
@@ -647,9 +650,9 @@ gui_gtk3_should_draw_cursor(void)
 {
     unsigned int cond = 0;
     cond |= gui_gtk_is_blink_on();
-    cond |= is_key_pressed;
+    if (gui.cursor_col >= gui.col)
+	cond |= is_key_pressed;
     cond |= gui.in_focus == FALSE;
-    cond |= gui_gtk_is_no_blink();
     return  cond;
 }
 
@@ -681,17 +684,32 @@ draw_event(GtkWidget *widget,
 	    for (i = 0; i < list->num_rectangles; i++)
 	    {
 		const cairo_rectangle_t rect = list->rectangles[i];
-		gui_gtk3_redraw(rect.x, rect.y, rect.width, rect.height);
+		if (blink_mode)
+		    gui_gtk3_redraw(rect.x, rect.y, rect.width, rect.height);
+		else
+		{
+		    if (get_real_state() & VISUAL)
+			gui_gtk3_redraw(rect.x, rect.y,
+				rect.width, rect.height);
+		    else
+			gui_redraw(rect.x, rect.y, rect.width, rect.height);
+		}
 	    }
 	}
 	cairo_rectangle_list_destroy(list);
+
+	if (get_real_state() & VISUAL)
+	{
+	    if (gui.cursor_row == gui.row && gui.cursor_col >= gui.col)
+		gui_update_cursor(TRUE, TRUE);
+	}
 
 	cairo_paint(cr);
     }
     gui.by_signal = FALSE;
 
     /* Add the cursor to the window if necessary.*/
-    if (gui_gtk3_should_draw_cursor())
+    if (gui_gtk3_should_draw_cursor() && blink_mode)
 	gui_gtk3_update_cursor(cr);
 
     return FALSE;
@@ -790,20 +808,33 @@ gui_gtk_is_blink_on(void)
 {
     return blink_state == BLINK_ON;
 }
-
-    static gboolean
-gui_gtk_is_no_blink(void)
-{
-    return blink_waittime == 0 || blink_ontime == 0 || blink_offtime == 0;
-}
 #endif
 
     void
 gui_mch_set_blinking(long waittime, long on, long off)
 {
+#if GTK_CHECK_VERSION(3,0,0)
+    if (waittime == 0 || on == 0 || off == 0)
+    {
+	blink_mode = FALSE;
+
+	blink_waittime = 700;
+	blink_ontime = 400;
+	blink_offtime = 250;
+    }
+    else
+    {
+	blink_mode = TRUE;
+
+	blink_waittime = waittime;
+	blink_ontime = on;
+	blink_offtime = off;
+    }
+#else
     blink_waittime = waittime;
     blink_ontime = on;
     blink_offtime = off;
+#endif
 }
 
 /*
@@ -1648,6 +1679,12 @@ gui_mch_init_check(void)
     }
 #endif
 
+#if GTK_CHECK_VERSION(3,10,0)
+    /* Vim currently assumes that Gtk means X11, so it cannot use native Gtk
+     * support for other backends such as Wayland. */
+    gdk_set_allowed_backends ("x11");
+#endif
+
 #ifdef FEAT_GUI_GNOME
     if (gtk_socket_id == 0)
 	using_gnome = 1;
@@ -1805,8 +1842,13 @@ gui_gtk_get_pointer_device(GtkWidget *widget)
 {
     GdkWindow * const win = gtk_widget_get_window(widget);
     GdkDisplay * const dpy = gdk_window_get_display(win);
+# if GTK_CHECK_VERSION(3,20,0)
+    GdkSeat * const seat = gdk_display_get_default_seat(dpy);
+    return gdk_seat_get_pointer(seat);
+# else
     GdkDeviceManager * const mngr = gdk_display_get_device_manager(dpy);
     return gdk_device_manager_get_client_pointer(mngr);
+# endif
 }
 
     static GdkWindow *
@@ -1820,6 +1862,7 @@ gui_gtk_get_pointer(GtkWidget       *widget,
     return gdk_window_get_device_position(win, dev , x, y, state);
 }
 
+# if defined(FEAT_GUI_TABLINE) || defined(PROTO)
     static GdkWindow *
 gui_gtk_window_at_position(GtkWidget *widget,
 			   gint      *x,
@@ -1828,6 +1871,7 @@ gui_gtk_window_at_position(GtkWidget *widget,
     GdkDevice * const dev = gui_gtk_get_pointer_device(widget);
     return gdk_device_get_window_at_position(dev, x, y);
 }
+# endif
 #endif
 
 /*
@@ -3329,6 +3373,8 @@ set_toolbar_style(GtkToolbar *toolbar)
 	case TBIS_SMALL:    size = GTK_ICON_SIZE_SMALL_TOOLBAR;	break;
 	case TBIS_MEDIUM:   size = GTK_ICON_SIZE_BUTTON;	break;
 	case TBIS_LARGE:    size = GTK_ICON_SIZE_LARGE_TOOLBAR;	break;
+	case TBIS_HUGE:     size = GTK_ICON_SIZE_DND;		break;
+	case TBIS_GIANT:    size = GTK_ICON_SIZE_DIALOG;	break;
 	default:	    size = GTK_ICON_SIZE_INVALID;	break;
     }
     oldsize = gtk_toolbar_get_icon_size(toolbar);
@@ -6291,8 +6337,25 @@ gui_mch_flash(int msec)
 gui_mch_invert_rectangle(int r, int c, int nr, int nc)
 {
 #if GTK_CHECK_VERSION(3,0,0)
-    /* TODO Replace GdkGC with Cairo */
-    (void)r; (void)c; (void)nr; (void)nc;
+    const GdkRectangle rect = {
+	FILL_X(c), FILL_Y(r), nc * gui.char_width, nr * gui.char_height
+    };
+    cairo_t * const cr = cairo_create(gui.surface);
+
+    set_cairo_source_rgb_from_pixel(cr, gui.norm_pixel ^ gui.back_pixel);
+# if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1,9,2)
+    cairo_set_operator(cr, CAIRO_OPERATOR_DIFFERENCE);
+# else
+    /* Give an implementation for older cairo versions if necessary. */
+# endif
+    gdk_cairo_rectangle(cr, &rect);
+    cairo_fill(cr);
+
+    cairo_destroy(cr);
+
+    if (!gui.by_signal)
+	gtk_widget_queue_draw_area(gui.drawarea, rect.x, rect.y,
+		rect.width, rect.height);
 #else
     GdkGCValues values;
     GdkGC *invert_gc;

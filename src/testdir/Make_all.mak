@@ -79,15 +79,12 @@ SCRIPTS_ALL = \
 	test93.out \
 	test94.out \
 	test95.out \
-	test96.out \
 	test98.out \
 	test99.out \
 	test101.out \
 	test102.out \
 	test103.out \
 	test104.out \
-	test105.out \
-	test106.out \
 	test107.out \
 	test108.out \
 	test_autocmd_option.out \
@@ -107,10 +104,8 @@ SCRIPTS_ALL = \
 	test_listlbr.out \
 	test_mapping.out \
 	test_marks.out \
-	test_match_conceal.out \
 	test_nested_function.out \
 	test_options.out \
-	test_qf_title.out \
 	test_ruby.out \
 	test_search_mbyte.out \
 	test_signs.out \
@@ -133,7 +128,6 @@ SCRIPTS_MORE1 = \
 # Tests that run on most systems, but not on Amiga and DOS/Windows.
 SCRIPTS_MORE2 = \
 	test2.out \
-	test10.out \
 	test12.out \
 	test13.out \
 	test25.out \
@@ -169,20 +163,28 @@ SCRIPTS_GUI = test16.out
 
 
 # Tests using runtest.vim.vim.
-# Keep test_alot.res as the last one, sort the others.
+# Keep test_alot*.res as the last one, sort the others.
 NEW_TESTS = test_arglist.res \
 	    test_assert.res \
+	    test_backspace_opt.res \
 	    test_cdo.res \
 	    test_channel.res \
 	    test_hardcopy.res \
+	    test_history.res \
 	    test_increment.res \
 	    test_json.res \
 	    test_langmap.res \
+	    test_matchadd_conceal.res \
+	    test_packadd.res \
 	    test_perl.res \
 	    test_quickfix.res \
 	    test_syntax.res \
 	    test_viminfo.res \
 	    test_viml.res \
+	    test_visual.res \
+	    test_window_id.res \
+	    test_alot_latin.res \
+	    test_alot_utf8.res \
 	    test_alot.res
 
 

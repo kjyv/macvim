@@ -169,7 +169,7 @@ coladvance2(
 
 	if (finetune
 		&& curwin->w_p_wrap
-# ifdef FEAT_VERTSPLIT
+# ifdef FEAT_WINDOWS
 		&& curwin->w_width != 0
 # endif
 		&& wcol >= (colnr_T)width)
@@ -1127,7 +1127,7 @@ free_all_mem(void)
 # ifdef FEAT_DIFF
     diff_clear(curtab);
 # endif
-# ifdef FEAT_CHANNEL
+# ifdef FEAT_JOB_CHANNEL
     channel_free_all();
 # endif
     clear_sb_text();	      /* free any scrollback text */
@@ -1729,13 +1729,14 @@ vim_memcmp(void *b1, void *b2, size_t len)
 }
 #endif
 
+/* skipped when generating prototypes, the prototype is in vim.h */
 #ifdef VIM_MEMMOVE
 /*
  * Version of memmove() that handles overlapping source and destination.
  * For systems that don't have a function that is guaranteed to do that (SYSV).
  */
     void
-mch_memmove(void *src_arg, *dst_arg, size_t len)
+mch_memmove(void *src_arg, void *dst_arg, size_t len)
 {
     /*
      * A void doesn't have a size, we use char pointers.
@@ -3638,7 +3639,7 @@ get_shape_idx(int mouse)
     }
     if (mouse && drag_status_line)
 	return SHAPE_IDX_SDRAG;
-# ifdef FEAT_VERTSPLIT
+# ifdef FEAT_WINDOWS
     if (mouse && drag_sep_line)
 	return SHAPE_IDX_VDRAG;
 # endif
@@ -6226,7 +6227,7 @@ has_non_ascii(char_u *s)
 parse_queued_messages(void)
 {
     /* For Win32 mch_breakcheck() does not check for input, do it here. */
-# if defined(WIN32) && defined(FEAT_CHANNEL)
+# if defined(WIN32) && defined(FEAT_JOB_CHANNEL)
     channel_handle_events();
 # endif
 
@@ -6234,7 +6235,10 @@ parse_queued_messages(void)
     /* Process the queued netbeans messages. */
     netbeans_parse_messages();
 # endif
-# ifdef FEAT_CHANNEL
+# ifdef FEAT_JOB_CHANNEL
+    /* Write any buffer lines still to be written. */
+    channel_write_any_lines();
+
     /* Process the messages queued on channels. */
     channel_parse_messages();
 # endif
@@ -6242,7 +6246,7 @@ parse_queued_messages(void)
     /* Process the queued clientserver messages. */
     server_parse_messages();
 # endif
-# ifdef FEAT_JOB
+# ifdef FEAT_JOB_CHANNEL
     /* Check if any jobs have ended. */
     job_check_ended();
 # endif

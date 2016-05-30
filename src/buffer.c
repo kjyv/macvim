@@ -139,14 +139,19 @@ open_buffer(
 #endif
        )
     {
+	int old_msg_silent = msg_silent;
+
 #ifdef FEAT_NETBEANS_INTG
 	int oldFire = netbeansFireChanges;
 
 	netbeansFireChanges = 0;
 #endif
+	if (shortmess(SHM_FILEINFO))
+	    msg_silent = 1;
 	retval = readfile(curbuf->b_ffname, curbuf->b_fname,
 		  (linenr_T)0, (linenr_T)0, (linenr_T)MAXLNUM, eap,
 		  flags | READ_NEW);
+	msg_silent = old_msg_silent;
 #ifdef FEAT_NETBEANS_INTG
 	netbeansFireChanges = oldFire;
 #endif
@@ -573,9 +578,12 @@ buf_freeall(buf_T *buf, int flags)
     int		is_curbuf = (buf == curbuf);
 
     buf->b_closing = TRUE;
-    apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, FALSE, buf);
-    if (!buf_valid(buf))	    /* autocommands may delete the buffer */
-	return;
+    if (buf->b_ml.ml_mfp != NULL)
+    {
+	apply_autocmds(EVENT_BUFUNLOAD, buf->b_fname, buf->b_fname, FALSE, buf);
+	if (!buf_valid(buf))	    /* autocommands may delete the buffer */
+	    return;
+    }
     if ((flags & BFA_DEL) && buf->b_p_bl)
     {
 	apply_autocmds(EVENT_BUFDELETE, buf->b_fname, buf->b_fname, FALSE, buf);
@@ -674,6 +682,9 @@ free_buffer(buf_T *buf)
 #endif
 #ifdef FEAT_RUBY
     ruby_buffer_free(buf);
+#endif
+#ifdef FEAT_JOB_CHANNEL
+    channel_buffer_free(buf);
 #endif
 #ifdef FEAT_AUTOCMD
     aubuflocal_remove(buf);
@@ -3732,7 +3743,7 @@ build_stl_str_hl(
 	    {
 		/* remove group if all items are empty */
 		for (n = groupitem[groupdepth] + 1; n < curitem; n++)
-		    if (item[n].type == Normal)
+		    if (item[n].type == Normal || item[n].type == Highlight)
 			break;
 		if (n == curitem)
 		{
@@ -4612,9 +4623,9 @@ do_arg_all(
     old_curwin = curwin;
     old_curtab = curtab;
 
-#ifdef FEAT_GUI
+# ifdef FEAT_GUI
     need_mouse_correct = TRUE;
-#endif
+# endif
 
     /*
      * Try closing all windows that are not in the argument list.
@@ -4634,10 +4645,7 @@ do_arg_all(
 	    buf = wp->w_buffer;
 	    if (buf->b_ffname == NULL
 		    || (!keep_tabs && buf->b_nwindows > 1)
-#ifdef FEAT_VERTSPLIT
-		    || wp->w_width != Columns
-#endif
-		    )
+		    || wp->w_width != Columns)
 		i = opened_len;
 	    else
 	    {
@@ -4906,13 +4914,11 @@ ex_buffer_all(exarg_T *eap)
 	{
 	    wpnext = wp->w_next;
 	    if ((wp->w_buffer->b_nwindows > 1
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 		    || ((cmdmod.split & WSP_VERT)
 			? wp->w_height + wp->w_status_height < Rows - p_ch
 							    - tabline_height()
 			: wp->w_width != Columns)
-#endif
-#ifdef FEAT_WINDOWS
 		    || (had_tab > 0 && wp != firstwin)
 #endif
 		    ) && firstwin != lastwin

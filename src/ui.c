@@ -1551,7 +1551,7 @@ clip_gen_owner_exists(VimClipboard *cbd UNUSED)
  * descriptions which would otherwise overflow.  The buffer is considered full
  * when only this extra space (or part of it) remains.
  */
-#if defined(FEAT_SUN_WORKSHOP) || defined(FEAT_CHANNEL) \
+#if defined(FEAT_SUN_WORKSHOP) || defined(FEAT_JOB_CHANNEL) \
 	|| defined(FEAT_CLIENTSERVER)
    /*
     * Sun WorkShop and NetBeans stuff debugger commands into the input buffer.
@@ -1706,16 +1706,24 @@ add_to_input_buf_csi(char_u *str, int len)
 push_raw_key(char_u *s, int len)
 {
     char_u *tmpbuf;
+    char_u *inp = s;
 
+    /* use the conversion result if possible */
     tmpbuf = hangul_string_convert(s, &len);
     if (tmpbuf != NULL)
-	s = tmpbuf;
+	inp = tmpbuf;
 
-    while (len--)
-	inbuf[inbufcount++] = *s++;
-
-    if (tmpbuf != NULL)
-	vim_free(tmpbuf);
+    for (; len--; inp++)
+    {
+	inbuf[inbufcount++] = *inp;
+	if (*inp == CSI)
+	{
+	    /* Turn CSI into K_CSI. */
+	    inbuf[inbufcount++] = KS_EXTRA;
+	    inbuf[inbufcount++] = (int)KE_CSI;
+	}
+    }
+    vim_free(tmpbuf);
 }
 #endif
 
@@ -2595,7 +2603,7 @@ jump_to_mouse(
     int		which_button)	/* MOUSE_LEFT, MOUSE_RIGHT, MOUSE_MIDDLE */
 {
     static int	on_status_line = 0;	/* #lines below bottom of window */
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
     static int	on_sep_line = 0;	/* on separator right of window */
 #endif
     static int	prev_row = -1;
@@ -2635,7 +2643,7 @@ retnomove:
 	 * line, stop Visual mode */
 	if (on_status_line)
 	    return IN_STATUS_LINE;
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 	if (on_sep_line)
 	    return IN_SEP_LINE;
 #endif
@@ -2693,7 +2701,7 @@ retnomove:
 	}
 	else
 	    on_status_line = 0;
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 	if (col >= wp->w_width)		/* In separator line */
 	{
 	    on_sep_line = col - wp->w_width + 1;
@@ -2718,7 +2726,7 @@ retnomove:
 	if (VIsual_active
 		&& (wp->w_buffer != curwin->w_buffer
 		    || (!on_status_line
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 			&& !on_sep_line
 #endif
 #ifdef FEAT_FOLDING
@@ -2742,9 +2750,7 @@ retnomove:
 	{
 	    /* A click outside the command-line window: Use modeless
 	     * selection if possible.  Allow dragging the status lines. */
-# ifdef FEAT_VERTSPLIT
 	    on_sep_line = 0;
-# endif
 # ifdef FEAT_CLIPBOARD
 	    if (on_status_line)
 		return IN_STATUS_LINE;
@@ -2776,7 +2782,7 @@ retnomove:
 	    else
 		return IN_STATUS_LINE | CURSOR_MOVED;
 	}
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 	if (on_sep_line)			/* In (or below) status line */
 	{
 	    /* Don't use start_arrow() if we're in the same window */
@@ -2810,7 +2816,7 @@ retnomove:
 #endif
 	return IN_STATUS_LINE;			/* Cursor didn't move */
     }
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
     else if (on_sep_line && which_button == MOUSE_LEFT)
     {
 	if (dragwin != NULL)
@@ -2840,7 +2846,7 @@ retnomove:
 #endif
 
 	row -= W_WINROW(curwin);
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 	col -= W_WINCOL(curwin);
 #endif
 
@@ -3101,7 +3107,6 @@ mouse_find_win(int *rowp, int *colp UNUSED)
     {
 	if (fp->fr_layout == FR_LEAF)
 	    break;
-#ifdef FEAT_VERTSPLIT
 	if (fp->fr_layout == FR_ROW)
 	{
 	    for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next)
@@ -3111,7 +3116,6 @@ mouse_find_win(int *rowp, int *colp UNUSED)
 		*colp -= fp->fr_width;
 	    }
 	}
-#endif
 	else    /* fr_layout == FR_COL */
 	{
 	    for (fp = fp->fr_child; fp->fr_next != NULL; fp = fp->fr_next)
@@ -3154,7 +3158,7 @@ get_fpos_of_mouse(pos_T *mpos)
      */
     if (row >= wp->w_height)	/* In (or below) status line */
 	return IN_STATUS_LINE;
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
     if (col >= wp->w_width)	/* In vertical separator line */
 	return IN_SEP_LINE;
 #endif

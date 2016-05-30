@@ -53,9 +53,8 @@ func s:run_server(testfunc, ...)
     endif
 
     " Wait for up to 2 seconds for the port number to be there.
-    let cnt = 20
     let l = []
-    while cnt > 0
+    for i in range(200)
       try
         let l = readfile("Xportnr")
       catch
@@ -63,9 +62,8 @@ func s:run_server(testfunc, ...)
       if len(l) >= 1
         break
       endif
-      sleep 100m
-      let cnt -= 1
-    endwhile
+      sleep 10m
+    endfor
     call delete("Xportnr")
 
     if len(l) == 0
@@ -102,31 +100,69 @@ func s:RequestHandler(handle, msg)
   let s:responseMsg = a:msg
 endfunc
 
+" Wait for up to a second for "expr" to become true.
+func s:waitFor(expr)
+  for i in range(100)
+    try
+      if eval(a:expr)
+	return
+      endif
+    catch
+    endtry
+    sleep 10m
+  endfor
+endfunc
+
 func s:communicate(port)
   let handle = ch_open('localhost:' . a:port, s:chopt)
   if ch_status(handle) == "fail"
     call assert_false(1, "Can't open channel")
     return
   endif
+  if has('job')
+    " check that getjob without a job is handled correctly
+    call assert_equal('no process', string(ch_getjob(handle)))
+  endif
+  let dict = ch_info(handle)
+  call assert_true(dict.id != 0)
+  call assert_equal('open', dict.status)
+  call assert_equal(a:port, string(dict.port))
+  call assert_equal('open', dict.sock_status)
+  call assert_equal('socket', dict.sock_io)
 
   " Simple string request and reply.
   call assert_equal('got it', ch_evalexpr(handle, 'hello!'))
+
+  " Malformed command should be ignored.
+  call assert_equal('ok', ch_evalexpr(handle, 'malformed1'))
+  call assert_equal('ok', ch_evalexpr(handle, 'malformed2'))
+  call assert_equal('ok', ch_evalexpr(handle, 'malformed3'))
+
+  " split command should work
+  call assert_equal('ok', ch_evalexpr(handle, 'split'))
+  call s:waitFor('exists("g:split")')
+  call assert_equal(123, g:split)
 
   " Request that triggers sending two ex commands.  These will usually be
   " handled before getting the response, but it's not guaranteed, thus wait a
   " tiny bit for the commands to get executed.
   call assert_equal('ok', ch_evalexpr(handle, 'make change'))
-  sleep 10m
+  call s:waitFor('"added2" == getline("$")')
   call assert_equal('added1', getline(line('$') - 1))
   call assert_equal('added2', getline('$'))
 
-  call assert_equal('ok', ch_evalexpr(handle, 'do normal'))
-  sleep 10m
+  " Request command "foo bar", which fails silently.
+  call assert_equal('ok', ch_evalexpr(handle, 'bad command'))
+  call s:waitFor('v:errmsg =~ "E492"')
+  call assert_match('E492:.*foo bar', v:errmsg)
+
+  call assert_equal('ok', ch_evalexpr(handle, 'do normal', {'timeout': 100}))
+  call s:waitFor('"added more" == getline("$")')
   call assert_equal('added more', getline('$'))
 
   " Send a request with a specific handler.
   call ch_sendexpr(handle, 'hello!', {'callback': 's:RequestHandler'})
-  sleep 10m
+  call s:waitFor('exists("s:responseHandle")')
   if !exists('s:responseHandle')
     call assert_false(1, 's:responseHandle was not set')
   else
@@ -137,7 +173,7 @@ func s:communicate(port)
 
   let s:responseMsg = ''
   call ch_sendexpr(handle, 'hello!', {'callback': function('s:RequestHandler')})
-  sleep 10m
+  call s:waitFor('exists("s:responseHandle")')
   if !exists('s:responseHandle')
     call assert_false(1, 's:responseHandle was not set')
   else
@@ -145,6 +181,9 @@ func s:communicate(port)
     unlet s:responseHandle
   endif
   call assert_equal('got it', s:responseMsg)
+
+  " Collect garbage, tests that our handle isn't collected.
+  call test_garbagecollect_now()
 
   " check setting options (without testing the effect)
   call ch_setoptions(handle, {'callback': 's:NotUsed'})
@@ -158,24 +197,35 @@ func s:communicate(port)
   sleep 10m
   call assert_equal([-1, 'foo123'], ch_evalexpr(handle, 'eval-result'))
 
+  " Send an eval request with special characters.
+  call assert_equal('ok', ch_evalexpr(handle, 'eval-special'))
+  sleep 10m
+  call assert_equal([-2, "foo\x7f\x10\x01bar"], ch_evalexpr(handle, 'eval-result'))
+
+  " Send an eval request to get a line with special characters.
+  call setline(3, "a\nb\<CR>c\x01d\x7fe")
+  call assert_equal('ok', ch_evalexpr(handle, 'eval-getline'))
+  sleep 10m
+  call assert_equal([-3, "a\nb\<CR>c\x01d\x7fe"], ch_evalexpr(handle, 'eval-result'))
+
   " Send an eval request that fails.
   call assert_equal('ok', ch_evalexpr(handle, 'eval-fails'))
   sleep 10m
-  call assert_equal([-2, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
+  call assert_equal([-4, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
 
   " Send an eval request that works but can't be encoded.
   call assert_equal('ok', ch_evalexpr(handle, 'eval-error'))
   sleep 10m
-  call assert_equal([-3, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
+  call assert_equal([-5, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
 
   " Send a bad eval request. There will be no response.
   call assert_equal('ok', ch_evalexpr(handle, 'eval-bad'))
   sleep 10m
-  call assert_equal([-3, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
+  call assert_equal([-5, 'ERROR'], ch_evalexpr(handle, 'eval-result'))
 
   " Send an expr request
   call assert_equal('ok', ch_evalexpr(handle, 'an expr'))
-  sleep 10m
+  call s:waitFor('"three" == getline("$")')
   call assert_equal('one', getline(line('$') - 2))
   call assert_equal('two', getline(line('$') - 1))
   call assert_equal('three', getline('$'))
@@ -257,6 +307,8 @@ func Test_server_crash()
   call s:run_server('s:server_crash')
 endfunc
 
+"""""""""
+
 let s:reply = ""
 func s:Handler(chan, msg)
   unlet s:reply
@@ -272,12 +324,12 @@ func s:channel_handler(port)
 
   " Test that it works while waiting on a numbered message.
   call assert_equal('ok', ch_evalexpr(handle, 'call me'))
-  sleep 10m
+  call s:waitFor('"we called you" == s:reply')
   call assert_equal('we called you', s:reply)
 
   " Test that it works while not waiting on a numbered message.
   call ch_sendexpr(handle, 'call me again')
-  sleep 10m
+  call s:waitFor('"we did call you" == s:reply')
   call assert_equal('we did call you', s:reply)
 endfunc
 
@@ -289,6 +341,115 @@ func Test_channel_handler()
   call s:run_server('s:channel_handler')
   unlet s:chopt.callback
 endfunc
+
+"""""""""
+
+let s:ch_reply = ''
+func s:ChHandler(chan, msg)
+  unlet s:ch_reply
+  let s:ch_reply = a:msg
+endfunc
+
+let s:zero_reply = ''
+func s:OneHandler(chan, msg)
+  unlet s:zero_reply
+  let s:zero_reply = a:msg
+endfunc
+
+func s:channel_zero(port)
+  let handle = ch_open('localhost:' . a:port, s:chopt)
+  if ch_status(handle) == "fail"
+    call assert_false(1, "Can't open channel")
+    return
+  endif
+
+  " Check that eval works.
+  call assert_equal('got it', ch_evalexpr(handle, 'hello!'))
+
+  " Check that eval works if a zero id message is sent back.
+  let s:ch_reply = ''
+  call assert_equal('sent zero', ch_evalexpr(handle, 'send zero'))
+  if s:has_handler
+    call s:waitFor('"zero index" == s:ch_reply')
+    call assert_equal('zero index', s:ch_reply)
+  else
+    sleep 20m
+    call assert_equal('', s:ch_reply)
+  endif
+
+  " Check that handler works if a zero id message is sent back.
+  let s:ch_reply = ''
+  let s:zero_reply = ''
+  call ch_sendexpr(handle, 'send zero', {'callback': 's:OneHandler'})
+  call s:waitFor('"sent zero" == s:zero_reply')
+  if s:has_handler
+    call assert_equal('zero index', s:ch_reply)
+  else
+    call assert_equal('', s:ch_reply)
+  endif
+  call assert_equal('sent zero', s:zero_reply)
+endfunc
+
+func Test_zero_reply()
+  call ch_log('Test_zero_reply()')
+  " Run with channel handler
+  let s:has_handler = 1
+  let s:chopt.callback = 's:ChHandler'
+  call s:run_server('s:channel_zero')
+  unlet s:chopt.callback
+
+  " Run without channel handler
+  let s:has_handler = 0
+  call s:run_server('s:channel_zero')
+endfunc
+
+"""""""""
+
+let s:reply1 = ""
+func s:HandleRaw1(chan, msg)
+  unlet s:reply1
+  let s:reply1 = a:msg
+endfunc
+
+let s:reply2 = ""
+func s:HandleRaw2(chan, msg)
+  unlet s:reply2
+  let s:reply2 = a:msg
+endfunc
+
+let s:reply3 = ""
+func s:HandleRaw3(chan, msg)
+  unlet s:reply3
+  let s:reply3 = a:msg
+endfunc
+
+func s:raw_one_time_callback(port)
+  let handle = ch_open('localhost:' . a:port, s:chopt)
+  if ch_status(handle) == "fail"
+    call assert_false(1, "Can't open channel")
+    return
+  endif
+  call ch_setoptions(handle, {'mode': 'raw'})
+
+  " The message are sent raw, we do our own JSON strings here.
+  call ch_sendraw(handle, "[1, \"hello!\"]", {'callback': 's:HandleRaw1'})
+  call s:waitFor('s:reply1 != ""')
+  call assert_equal("[1, \"got it\"]", s:reply1)
+  call ch_sendraw(handle, "[2, \"echo something\"]", {'callback': 's:HandleRaw2'})
+  call ch_sendraw(handle, "[3, \"wait a bit\"]", {'callback': 's:HandleRaw3'})
+  call s:waitFor('s:reply2 != ""')
+  call assert_equal("[2, \"something\"]", s:reply2)
+  " wait for the 200 msec delayed reply
+  call s:waitFor('s:reply3 != ""')
+  call assert_equal("[3, \"waited\"]", s:reply3)
+endfunc
+
+func Test_raw_one_time_callback()
+  call ch_log('Test_raw_one_time_callback()')
+  call s:run_server('s:raw_one_time_callback')
+endfunc
+
+"""""""""
 
 " Test that trying to connect to a non-existing port fails quickly.
 func Test_connect_waittime()
@@ -313,10 +474,11 @@ func Test_connect_waittime()
       " Oops, port does exists.
       call ch_close(handle)
     else
-      " Failed connection should wait about 500 msec.
+      " Failed connection should wait about 500 msec.  Can be longer if the
+      " computer is busy with other things.
       let elapsed = reltime(start)
       call assert_true(reltimefloat(elapsed) > 0.3)
-      call assert_true(reltimefloat(elapsed) < 1.0)
+      call assert_true(reltimefloat(elapsed) < 1.5)
     endif
   catch
     if v:exception !~ 'Connection reset by peer'
@@ -324,6 +486,8 @@ func Test_connect_waittime()
     endif
   endtry
 endfunc
+
+"""""""""
 
 func Test_raw_pipe()
   if !has('job')
@@ -333,20 +497,26 @@ func Test_raw_pipe()
   let job = job_start(s:python . " test_channel_pipe.py", {'mode': 'raw'})
   call assert_equal("run", job_status(job))
   try
-    let handle = job_getchannel(job)
-    call ch_sendraw(handle, "echo something\n")
-    let msg = ch_readraw(handle)
+    " For a change use the job where a channel is expected.
+    call ch_sendraw(job, "echo something\n")
+    let msg = ch_readraw(job)
     call assert_equal("something\n", substitute(msg, "\r", "", 'g'))
 
-    call ch_sendraw(handle, "double this\n")
-    let msg = ch_readraw(handle)
+    call ch_sendraw(job, "double this\n")
+    let msg = ch_readraw(job)
     call assert_equal("this\nAND this\n", substitute(msg, "\r", "", 'g'))
 
-    let reply = ch_evalraw(handle, "quit\n")
+    let reply = ch_evalraw(job, "quit\n", {'timeout': 100})
     call assert_equal("Goodbye!\n", substitute(reply, "\r", "", 'g'))
   finally
     call job_stop(job)
   endtry
+
+  let s:job = job
+  call s:waitFor('"dead" == job_status(s:job)')
+  let info = job_info(job)
+  call assert_equal("dead", info.status)
+  call assert_equal("term", info.stoponexit)
 endfunc
 
 func Test_nl_pipe()
@@ -354,12 +524,15 @@ func Test_nl_pipe()
     return
   endif
   call ch_log('Test_nl_pipe()')
-  let job = job_start(s:python . " test_channel_pipe.py")
+  let job = job_start([s:python, "test_channel_pipe.py"])
   call assert_equal("run", job_status(job))
   try
     let handle = job_getchannel(job)
     call ch_sendraw(handle, "echo something\n")
     call assert_equal("something", ch_readraw(handle))
+
+    call ch_sendraw(handle, "echoerr wrong\n")
+    call assert_equal("wrong", ch_readraw(handle, {'part': 'err'}))
 
     call ch_sendraw(handle, "double this\n")
     call assert_equal("this", ch_readraw(handle))
@@ -372,13 +545,153 @@ func Test_nl_pipe()
   endtry
 endfunc
 
-func Test_pipe_to_buffer()
+func Test_nl_err_to_out_pipe()
+  if !has('job')
+    return
+  endif
+  call ch_logfile('Xlog')
+  call ch_log('Test_nl_err_to_out_pipe()')
+  let job = job_start(s:python . " test_channel_pipe.py", {'err_io': 'out'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echo something\n")
+    call assert_equal("something", ch_readraw(handle))
+
+    call ch_sendraw(handle, "echoerr wrong\n")
+    call assert_equal("wrong", ch_readraw(handle))
+  finally
+    call job_stop(job)
+    call ch_logfile('')
+    let loglines = readfile('Xlog')
+    call assert_true(len(loglines) > 10)
+    let found_test = 0
+    let found_send = 0
+    let found_recv = 0
+    let found_stop = 0
+    for l in loglines
+      if l =~ 'Test_nl_err_to_out_pipe'
+	let found_test = 1
+      endif
+      if l =~ 'SEND on.*echo something'
+	let found_send = 1
+      endif
+      if l =~ 'RECV on.*something'
+	let found_recv = 1
+      endif
+      if l =~ 'Stopping job with'
+	let found_stop = 1
+      endif
+    endfor
+    call assert_equal(1, found_test)
+    call assert_equal(1, found_send)
+    call assert_equal(1, found_recv)
+    call assert_equal(1, found_stop)
+    call delete('Xlog')
+  endtry
+endfunc
+
+func Test_nl_read_file()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_nl_read_file()')
+  call writefile(['echo something', 'echoerr wrong', 'double this'], 'Xinput')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'in_io': 'file', 'in_name': 'Xinput'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call assert_equal("something", ch_readraw(handle))
+    call assert_equal("wrong", ch_readraw(handle, {'part': 'err'}))
+    call assert_equal("this", ch_readraw(handle))
+    call assert_equal("AND this", ch_readraw(handle))
+  finally
+    call job_stop(job)
+    call delete('Xinput')
+  endtry
+endfunc
+
+func Test_nl_write_out_file()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_nl_write_out_file()')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'out_io': 'file', 'out_name': 'Xoutput'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echo line one\n")
+    call ch_sendraw(handle, "echo line two\n")
+    call ch_sendraw(handle, "double this\n")
+    call s:waitFor('len(readfile("Xoutput")) > 2')
+    call assert_equal(['line one', 'line two', 'this', 'AND this'], readfile('Xoutput'))
+  finally
+    call job_stop(job)
+    call delete('Xoutput')
+  endtry
+endfunc
+
+func Test_nl_write_err_file()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_nl_write_err_file()')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'err_io': 'file', 'err_name': 'Xoutput'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echoerr line one\n")
+    call ch_sendraw(handle, "echoerr line two\n")
+    call ch_sendraw(handle, "doubleerr this\n")
+    call s:waitFor('len(readfile("Xoutput")) > 2')
+    call assert_equal(['line one', 'line two', 'this', 'AND this'], readfile('Xoutput'))
+  finally
+    call job_stop(job)
+    call delete('Xoutput')
+  endtry
+endfunc
+
+func Test_nl_write_both_file()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_nl_write_both_file()')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'out_io': 'file', 'out_name': 'Xoutput', 'err_io': 'out'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echoerr line one\n")
+    call ch_sendraw(handle, "echo line two\n")
+    call ch_sendraw(handle, "double this\n")
+    call ch_sendraw(handle, "doubleerr that\n")
+    call s:waitFor('len(readfile("Xoutput")) > 5')
+    call assert_equal(['line one', 'line two', 'this', 'AND this', 'that', 'AND that'], readfile('Xoutput'))
+  finally
+    call job_stop(job)
+    call delete('Xoutput')
+  endtry
+endfunc
+
+func Run_test_pipe_to_buffer(use_name)
   if !has('job')
     return
   endif
   call ch_log('Test_pipe_to_buffer()')
-  let job = job_start(s:python . " test_channel_pipe.py",
-	\ {'out-io': 'buffer', 'out-name': 'pipe-output'})
+  let options = {'out_io': 'buffer'}
+  if a:use_name
+    let options['out_name'] = 'pipe-output'
+    let firstline = 'Reading from channel output...'
+  else
+    sp pipe-output
+    let options['out_buf'] = bufnr('%')
+    quit
+    let firstline = ''
+  endif
+  let job = job_start(s:python . " test_channel_pipe.py", options)
   call assert_equal("run", job_status(job))
   try
     let handle = job_getchannel(job)
@@ -387,17 +700,123 @@ func Test_pipe_to_buffer()
     call ch_sendraw(handle, "double this\n")
     call ch_sendraw(handle, "quit\n")
     sp pipe-output
-    for i in range(100)
-      sleep 10m
-      if line('$') >= 6
-	break
-      endif
-    endfor
-    call assert_equal(['Reading from channel output...', 'line one', 'line two', 'this', 'AND this', 'Goodbye!'], getline(1, '$'))
+    call s:waitFor('line("$") >= 6')
+    if getline('$') == 'DETACH'
+      $del
+    endif
+    call assert_equal([firstline, 'line one', 'line two', 'this', 'AND this', 'Goodbye!'], getline(1, '$'))
     bwipe!
   finally
     call job_stop(job)
   endtry
+endfunc
+
+func Test_pipe_to_buffer_name()
+  call Run_test_pipe_to_buffer(1)
+endfunc
+
+func Test_pipe_to_buffer_nr()
+  call Run_test_pipe_to_buffer(0)
+endfunc
+
+func Run_test_pipe_err_to_buffer(use_name)
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_err_to_buffer()')
+  let options = {'err_io': 'buffer'}
+  if a:use_name
+    let options['err_name'] = 'pipe-err'
+    let firstline = 'Reading from channel error...'
+  else
+    sp pipe-err
+    let options['err_buf'] = bufnr('%')
+    quit
+    let firstline = ''
+  endif
+  let job = job_start(s:python . " test_channel_pipe.py", options)
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echoerr line one\n")
+    call ch_sendraw(handle, "echoerr line two\n")
+    call ch_sendraw(handle, "doubleerr this\n")
+    call ch_sendraw(handle, "quit\n")
+    sp pipe-err
+    call s:waitFor('line("$") >= 5')
+    call assert_equal([firstline, 'line one', 'line two', 'this', 'AND this'], getline(1, '$'))
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_pipe_err_to_buffer_name()
+  call Run_test_pipe_err_to_buffer(1)
+endfunc
+  
+func Test_pipe_err_to_buffer_nr()
+  call Run_test_pipe_err_to_buffer(0)
+endfunc
+  
+func Test_pipe_both_to_buffer()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_both_to_buffer()')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'out_io': 'buffer', 'out_name': 'pipe-err', 'err_io': 'out'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echo line one\n")
+    call ch_sendraw(handle, "echoerr line two\n")
+    call ch_sendraw(handle, "double this\n")
+    call ch_sendraw(handle, "doubleerr that\n")
+    call ch_sendraw(handle, "quit\n")
+    sp pipe-err
+    call s:waitFor('line("$") >= 7')
+    call assert_equal(['Reading from channel output...', 'line one', 'line two', 'this', 'AND this', 'that', 'AND that', 'Goodbye!'], getline(1, '$'))
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Run_test_pipe_from_buffer(use_name)
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_from_buffer()')
+
+  sp pipe-input
+  call setline(1, ['echo one', 'echo two', 'echo three'])
+  let options = {'in_io': 'buffer', 'block_write': 1}
+  if a:use_name
+    let options['in_name'] = 'pipe-input'
+  else
+    let options['in_buf'] = bufnr('%')
+  endif
+
+  let job = job_start(s:python . " test_channel_pipe.py", options)
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call assert_equal('one', ch_read(handle))
+    call assert_equal('two', ch_read(handle))
+    call assert_equal('three', ch_read(handle))
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_pipe_from_buffer_name()
+  call Run_test_pipe_from_buffer(1)
+endfunc
+
+func Test_pipe_from_buffer_nr()
+  call Run_test_pipe_from_buffer(0)
 endfunc
 
 func Test_pipe_to_nameless_buffer()
@@ -406,23 +825,282 @@ func Test_pipe_to_nameless_buffer()
   endif
   call ch_log('Test_pipe_to_nameless_buffer()')
   let job = job_start(s:python . " test_channel_pipe.py",
-	\ {'out-io': 'buffer'})
+	\ {'out_io': 'buffer'})
   call assert_equal("run", job_status(job))
   try
     let handle = job_getchannel(job)
     call ch_sendraw(handle, "echo line one\n")
     call ch_sendraw(handle, "echo line two\n")
     exe ch_getbufnr(handle, "out") . 'sbuf'
-    for i in range(100)
-      sleep 10m
-      if line('$') >= 3
-	break
-      endif
-    endfor
+    call s:waitFor('line("$") >= 3')
     call assert_equal(['Reading from channel output...', 'line one', 'line two'], getline(1, '$'))
     bwipe!
   finally
     call job_stop(job)
+  endtry
+endfunc
+
+func Test_pipe_to_buffer_json()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_to_buffer_json()')
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'out_io': 'buffer', 'out_mode': 'json'})
+  call assert_equal("run", job_status(job))
+  try
+    let handle = job_getchannel(job)
+    call ch_sendraw(handle, "echo [0, \"hello\"]\n")
+    call ch_sendraw(handle, "echo [-2, 12.34]\n")
+    exe ch_getbufnr(handle, "out") . 'sbuf'
+    call s:waitFor('line("$") >= 3')
+    call assert_equal(['Reading from channel output...', '[0,"hello"]', '[-2,12.34]'], getline(1, '$'))
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+" Wait a little while for the last line, minus "offset", to equal "line".
+func s:wait_for_last_line(line, offset)
+  for i in range(100)
+    if getline(line('$') - a:offset) == a:line
+      break
+    endif
+    sleep 10m
+  endfor
+endfunc
+
+func Test_pipe_io_two_buffers()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_io_two_buffers()')
+
+  " Create two buffers, one to read from and one to write to.
+  split pipe-output
+  set buftype=nofile
+  split pipe-input
+  set buftype=nofile
+
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'in_io': 'buffer', 'in_name': 'pipe-input', 'in_top': 0,
+	\  'out_io': 'buffer', 'out_name': 'pipe-output',
+	\  'block_write': 1})
+  call assert_equal("run", job_status(job))
+  try
+    exe "normal Gaecho hello\<CR>"
+    exe bufwinnr('pipe-output') . "wincmd w"
+    call s:wait_for_last_line('hello', 0)
+    call assert_equal('hello', getline('$'))
+
+    exe bufwinnr('pipe-input') . "wincmd w"
+    exe "normal Gadouble this\<CR>"
+    exe bufwinnr('pipe-output') . "wincmd w"
+    call s:wait_for_last_line('AND this', 0)
+    call assert_equal('this', getline(line('$') - 1))
+    call assert_equal('AND this', getline('$'))
+
+    bwipe!
+    exe bufwinnr('pipe-input') . "wincmd w"
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_pipe_io_one_buffer()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_io_one_buffer()')
+
+  " Create one buffer to read from and to write to.
+  split pipe-io
+  set buftype=nofile
+
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'in_io': 'buffer', 'in_name': 'pipe-io', 'in_top': 0,
+	\  'out_io': 'buffer', 'out_name': 'pipe-io',
+	\  'block_write': 1})
+  call assert_equal("run", job_status(job))
+  try
+    exe "normal Goecho hello\<CR>"
+    call s:wait_for_last_line('hello', 1)
+    call assert_equal('hello', getline(line('$') - 1))
+
+    exe "normal Gadouble this\<CR>"
+    call s:wait_for_last_line('AND this', 1)
+    call assert_equal('this', getline(line('$') - 2))
+    call assert_equal('AND this', getline(line('$') - 1))
+
+    bwipe!
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_pipe_null()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_pipe_null()')
+
+  " We cannot check that no I/O works, we only check that the job starts
+  " properly.
+  let job = job_start(s:python . " test_channel_pipe.py something",
+	\ {'in_io': 'null'})
+  call assert_equal("run", job_status(job))
+  try
+    call assert_equal('something', ch_read(job))
+  finally
+    call job_stop(job)
+  endtry
+
+  let job = job_start(s:python . " test_channel_pipe.py err-out",
+	\ {'out_io': 'null'})
+  call assert_equal("run", job_status(job))
+  try
+    call assert_equal('err-out', ch_read(job, {"part": "err"}))
+  finally
+    call job_stop(job)
+  endtry
+
+  let job = job_start(s:python . " test_channel_pipe.py something",
+	\ {'err_io': 'null'})
+  call assert_equal("run", job_status(job))
+  try
+    call assert_equal('something', ch_read(job))
+  finally
+    call job_stop(job)
+  endtry
+
+  let job = job_start(s:python . " test_channel_pipe.py something",
+	\ {'out_io': 'null', 'err_io': 'out'})
+  call assert_equal("run", job_status(job))
+  call job_stop(job)
+
+  let job = job_start(s:python . " test_channel_pipe.py something",
+	\ {'in_io': 'null', 'out_io': 'null', 'err_io': 'null'})
+  call assert_equal("run", job_status(job))
+  call assert_equal('channel fail', string(job_getchannel(job)))
+  call assert_equal('fail', ch_status(job))
+  call job_stop(job)
+endfunc
+
+func Test_reuse_channel()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_reuse_channel()')
+
+  let job = job_start(s:python . " test_channel_pipe.py")
+  call assert_equal("run", job_status(job))
+  let handle = job_getchannel(job)
+  try
+    call ch_sendraw(handle, "echo something\n")
+    call assert_equal("something", ch_readraw(handle))
+  finally
+    call job_stop(job)
+  endtry
+
+  let job = job_start(s:python . " test_channel_pipe.py", {'channel': handle})
+  call assert_equal("run", job_status(job))
+  let handle = job_getchannel(job)
+  try
+    call ch_sendraw(handle, "echo again\n")
+    call assert_equal("again", ch_readraw(handle))
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_out_cb()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_out_cb()')
+
+  let dict = {'thisis': 'dict: '}
+  func dict.outHandler(chan, msg) dict
+    let s:outmsg = self.thisis . a:msg
+  endfunc
+  func dict.errHandler(chan, msg) dict
+    let s:errmsg = self.thisis . a:msg
+  endfunc
+  let job = job_start(s:python . " test_channel_pipe.py",
+	\ {'out_cb': dict.outHandler,
+	\ 'out_mode': 'json',
+	\ 'err_cb': dict.errHandler,
+	\ 'err_mode': 'json'})
+  call assert_equal("run", job_status(job))
+  try
+    let s:outmsg = ''
+    let s:errmsg = ''
+    call ch_sendraw(job, "echo [0, \"hello\"]\n")
+    call ch_sendraw(job, "echoerr [0, \"there\"]\n")
+    call s:waitFor('s:outmsg != ""')
+    call assert_equal("dict: hello", s:outmsg)
+    call s:waitFor('s:errmsg != ""')
+    call assert_equal("dict: there", s:errmsg)
+  finally
+    call job_stop(job)
+  endtry
+endfunc
+
+func Test_out_close_cb()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_out_close_cb()')
+
+  let s:counter = 1
+  let s:msg1 = ''
+  let s:closemsg = 0
+  func! OutHandler(chan, msg)
+    if s:counter == 1
+      let s:msg1 = a:msg
+    endif
+    let s:counter += 1
+  endfunc
+  func! CloseHandler(chan)
+    let s:closemsg = s:counter
+    let s:counter += 1
+  endfunc
+  let job = job_start(s:python . " test_channel_pipe.py quit now",
+	\ {'out_cb': 'OutHandler',
+	\ 'close_cb': 'CloseHandler'})
+  call assert_equal("run", job_status(job))
+  try
+    call s:waitFor('s:closemsg != 0 && s:msg1 != ""')
+    call assert_equal('quit', s:msg1)
+    call assert_equal(2, s:closemsg)
+  finally
+    call job_stop(job)
+    delfunc OutHandler
+    delfunc CloseHandler
+  endtry
+endfunc
+
+func Test_read_in_close_cb()
+  if !has('job')
+    return
+  endif
+  call ch_log('Test_read_in_close_cb()')
+
+  let s:received = ''
+  func! CloseHandler(chan)
+    let s:received = ch_read(a:chan)
+  endfunc
+  let job = job_start(s:python . " test_channel_pipe.py quit now",
+	\ {'close_cb': 'CloseHandler'})
+  call assert_equal("run", job_status(job))
+  try
+    call s:waitFor('s:received != ""')
+    call assert_equal('quit', s:received)
+  finally
+    call job_stop(job)
+    delfunc CloseHandler
   endtry
 endfunc
 
@@ -438,7 +1116,7 @@ endfunc
 func s:unlet_handle(port)
   let s:channelfd = ch_open('localhost:' . a:port, s:chopt)
   call ch_sendexpr(s:channelfd, "test", {'callback': function('s:UnletHandler')})
-  sleep 10m
+  call s:waitFor('"what?" == s:unletResponse')
   call assert_equal('what?', s:unletResponse)
 endfunc
 
@@ -459,7 +1137,7 @@ endfunc
 func s:close_handle(port)
   let s:channelfd = ch_open('localhost:' . a:port, s:chopt)
   call ch_sendexpr(s:channelfd, "test", {'callback': function('s:CloseHandler')})
-  sleep 10m
+  call s:waitFor('"what?" == s:unletResponse')
   call assert_equal('what?', s:unletResponse)
 endfunc
 
@@ -511,8 +1189,9 @@ function s:test_call(port)
     return
   endif
 
+  let s:call_ret = []
   call assert_equal('ok', ch_evalexpr(handle, 'call-func'))
-  sleep 20m
+  call s:waitFor('len(s:call_ret) > 0')
   call assert_equal([1, 2, 3], s:call_ret)
 endfunc
 
@@ -529,20 +1208,29 @@ function MyExitCb(job, status)
 endfunc
 
 function s:test_exit_callback(port)
-  call job_setoptions(s:job, {'exit-cb': 'MyExitCb'})
+  call job_setoptions(s:job, {'exit_cb': 'MyExitCb'})
   let s:exit_job = s:job
+  call assert_equal('MyExitCb', job_info(s:job)['exit_cb'])
 endfunc
 
 func Test_exit_callback()
   if has('job')
+    call ch_log('Test_exit_callback()')
     call s:run_server('s:test_exit_callback')
 
-    " the job may take a little while to exit
-    sleep 50m
+    " wait up to a second for the job to exit
+    for i in range(100)
+      if s:job_exit_ret == 'done'
+	break
+      endif
+      sleep 10m
+      " calling job_status() triggers the callback
+      call job_status(s:exit_job)
+    endfor
 
-    " calling job_status() triggers the callback
-    call job_status(s:exit_job)
     call assert_equal('done', s:job_exit_ret)
+    call assert_equal('dead', job_info(s:exit_job).status)
+    unlet s:exit_job
   endif
 endfunc
 
@@ -559,10 +1247,10 @@ function s:test_close_callback(port)
     call assert_false(1, "Can't open channel")
     return
   endif
-  call ch_setoptions(handle, {'close-cb': 'MyCloseCb'})
+  call ch_setoptions(handle, {'close_cb': 'MyCloseCb'})
 
   call assert_equal('', ch_evalexpr(handle, 'close me'))
-  sleep 20m
+  call s:waitFor('"closed" == s:ch_close_ret')
   call assert_equal('closed', s:ch_close_ret)
 endfunc
 
@@ -571,3 +1259,53 @@ func Test_close_callback()
   call s:run_server('s:test_close_callback')
 endfunc
 
+function s:test_close_partial(port)
+  let handle = ch_open('localhost:' . a:port, s:chopt)
+  if ch_status(handle) == "fail"
+    call assert_false(1, "Can't open channel")
+    return
+  endif
+  let s:d = {}
+  func s:d.closeCb(ch) dict
+    let self.close_ret = 'closed'
+  endfunc
+  call ch_setoptions(handle, {'close_cb': s:d.closeCb})
+
+  call assert_equal('', ch_evalexpr(handle, 'close me'))
+  call s:waitFor('"closed" == s:d.close_ret')
+  call assert_equal('closed', s:d.close_ret)
+  unlet s:d
+endfunc
+
+func Test_close_partial()
+  call ch_log('Test_close_partial()')
+  call s:run_server('s:test_close_partial')
+endfunc
+
+func Test_job_start_invalid()
+  call assert_fails('call job_start($x)', 'E474:')
+  call assert_fails('call job_start("")', 'E474:')
+endfunc
+
+" This was leaking memory.
+func Test_partial_in_channel_cycle()
+  let d = {}
+  let d.a = function('string', [d])
+  try
+    let d.b = ch_open('nowhere:123', {'close_cb': d.a})
+  catch
+    call assert_exception('E901:')
+  endtry
+  unlet d
+endfunc
+
+func Test_using_freed_memory()
+  let g:a = job_start(['ls'])
+  sleep 10m
+  call test_garbagecollect_now()
+endfunc
+
+
+
+" Uncomment this to see what happens, output is in src/testdir/channellog.
+" call ch_logfile('channellog', 'w')

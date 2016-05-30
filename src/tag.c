@@ -200,6 +200,14 @@ do_tag(
     {
 	use_tagstack = FALSE;
 	new_tag = TRUE;
+#if defined(FEAT_WINDOWS) && defined(FEAT_QUICKFIX)
+	if (g_do_tagpreview != 0)
+	{
+	    vim_free(ptag_entry.tagname);
+	    if ((ptag_entry.tagname = vim_strsave(tag)) == NULL)
+		goto end_do_tag;
+	}
+#endif
     }
     else
     {
@@ -792,7 +800,7 @@ do_tag(
 		    vim_free(cmd);
 		    vim_free(fname);
 		    if (list != NULL)
-			list_free(list, TRUE);
+			list_free(list);
 		    goto end_do_tag;
 		}
 
@@ -919,7 +927,7 @@ do_tag(
 		vim_snprintf((char *)IObuff, IOSIZE, "ltag %s", tag);
 		set_errorlist(curwin, list, ' ', IObuff);
 
-		list_free(list, TRUE);
+		list_free(list);
 		vim_free(fname);
 		vim_free(cmd);
 
@@ -2256,6 +2264,7 @@ parse_line:
 		if (ga_grow(&ga_match[mtt], 1) == OK)
 		{
 		    int len;
+		    int heuristic;
 
 		    if (help_only)
 		    {
@@ -2285,13 +2294,14 @@ parse_line:
 			    p[len] = '@';
 			    STRCPY(p + len + 1, help_lang);
 #endif
-			    sprintf((char *)p + len + 1 + ML_EXTRA, "%06d",
-				    help_heuristic(tagp.tagname,
-					match_re ? matchoff : 0, !match_no_ic)
+
+			    heuristic = help_heuristic(tagp.tagname,
+					match_re ? matchoff : 0, !match_no_ic);
 #ifdef FEAT_MULTI_LANG
-				    + help_pri
+			    heuristic += help_pri;
 #endif
-				    );
+			    sprintf((char *)p + len + 1 + ML_EXTRA, "%06d",
+								   heuristic);
 			}
 			*tagp.tagname_end = TAB;
 		    }
@@ -2638,7 +2648,7 @@ get_tagfname(
 #else
 		    "doc/tags"
 #endif
-					      , TRUE, found_tagfile_cb, NULL);
+					   , DIP_ALL, found_tagfile_cb, NULL);
 	}
 
 	if (tnp->tn_hf_idx >= tag_fnames.ga_len)

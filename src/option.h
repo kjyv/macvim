@@ -214,7 +214,8 @@
 #define SHM_INTRO	'I'		/* intro messages */
 #define SHM_COMPLETIONMENU  'c'		/* completion menu messages */
 #define SHM_RECORDING	'q'		/* short recording message */
-#define SHM_ALL		"rmfixlnwaWtToOsAIcq" /* all possible flags for 'shm' */
+#define SHM_FILEINFO	'F'		/* no file info messages */
+#define SHM_ALL		"rmfixlnwaWtToOsAIcqF" /* all possible flags for 'shm' */
 
 /* characters for p_go: */
 #define GO_ASEL		'a'		/* autoselect */
@@ -317,6 +318,7 @@ EXTERN int	p_acd;		/* 'autochdir' */
 #endif
 #ifdef FEAT_MBYTE
 EXTERN char_u	*p_ambw;	/* 'ambiwidth' */
+EXTERN char_u	*p_emoji;	/* 'emoji' */
 #endif
 #ifdef FEAT_ANTIALIAS
 EXTERN int	p_antialias;	/* 'antialias' */
@@ -461,7 +463,7 @@ static char *(p_dy_values[]) = {"lastline", "uhex", NULL};
 #define DY_LASTLINE		0x001
 #define DY_UHEX			0x002
 EXTERN int	p_ed;		/* 'edcompatible' */
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 EXTERN char_u	*p_ead;		/* 'eadirection' */
 #endif
 EXTERN int	p_ea;		/* 'equalalways' */
@@ -815,7 +817,7 @@ EXTERN char_u	*p_tal;		/* 'tabline' */
 #ifdef FEAT_SPELL
 EXTERN char_u	*p_sps;		/* 'spellsuggest' */
 #endif
-#ifdef FEAT_VERTSPLIT
+#ifdef FEAT_WINDOWS
 EXTERN int	p_spr;		/* 'splitright' */
 #endif
 EXTERN int	p_sol;		/* 'startofline' */
@@ -852,6 +854,9 @@ EXTERN int	p_tbidi;	/* 'termbidi' */
 #endif
 #ifdef FEAT_MBYTE
 EXTERN char_u	*p_tenc;	/* 'termencoding' */
+#endif
+#ifdef FEAT_TERMGUICOLORS
+EXTERN int	p_tgc;		/* 'termguicolors' */
 #endif
 EXTERN int	p_terse;	/* 'terse' */
 EXTERN int	p_ta;		/* 'textauto' */
@@ -890,12 +895,14 @@ static char *(p_toolbar_values[]) = {"text", "icons", "tooltips", "horiz", NULL}
 EXTERN char_u	*p_tbis;	/* 'toolbariconsize' */
 EXTERN unsigned tbis_flags;
 # ifdef IN_OPTION_C
-static char *(p_tbis_values[]) = {"tiny", "small", "medium", "large", NULL};
+static char *(p_tbis_values[]) = {"tiny", "small", "medium", "large", "huge", "giant", NULL};
 # endif
 # define TBIS_TINY		0x01
 # define TBIS_SMALL		0x02
 # define TBIS_MEDIUM		0x04
 # define TBIS_LARGE		0x08
+# define TBIS_HUGE		0x10
+# define TBIS_GIANT		0x20
 #endif
 EXTERN long	p_ttyscroll;	/* 'ttyscroll' */
 #if defined(FEAT_MOUSE) && (defined(UNIX) || defined(VMS))
@@ -972,8 +979,6 @@ EXTERN int	p_wmnu;		/* 'wildmenu' */
 #ifdef FEAT_WINDOWS
 EXTERN long	p_wh;		/* 'winheight' */
 EXTERN long	p_wmh;		/* 'winminheight' */
-#endif
-#ifdef FEAT_VERTSPLIT
 EXTERN long	p_wmw;		/* 'winminwidth' */
 EXTERN long	p_wiw;		/* 'winwidth' */
 #endif
@@ -1190,8 +1195,6 @@ enum
 #endif
 #ifdef FEAT_WINDOWS
     , WV_WFH
-#endif
-#ifdef FEAT_VERTSPLIT
     , WV_WFW
 #endif
     , WV_WRAP

@@ -406,9 +406,8 @@ gui_mch_wait_for_chars(int wtime)
     // called, so force a flush of the command queue here.
     [[MMBackend sharedInstance] flushQueue:YES];
 
-#if defined(FEAT_NETBEANS_INTG)
-    /* Process any queued netbeans messages. */
-    netbeans_parse_messages();
+#ifdef MESSAGE_QUEUE
+    parse_queued_messages();
 #endif
 
     return [[MMBackend sharedInstance] waitForInput:wtime];
@@ -1563,6 +1562,9 @@ gui_mch_flash(int msec)
     guicolor_T
 gui_mch_get_color(char_u *name)
 {
+    if (![MMBackend sharedInstance])
+	return INVALCOLOR;
+
 #ifdef FEAT_MBYTE
     name = CONVERT_TO_UTF8(name);
 #endif

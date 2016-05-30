@@ -317,7 +317,7 @@
 # define PLINES_NOFILL(x) plines(x)
 #endif
 
-#if defined(FEAT_CHANNEL) || defined(FEAT_JOB) || defined(FEAT_CLIENTSERVER)
+#if defined(FEAT_JOB_CHANNEL) || defined(FEAT_CLIENTSERVER)
 # define MESSAGE_QUEUE
 #endif
 
@@ -331,7 +331,7 @@
 #  if defined(WIN32)
 #   ifndef isnan
 #    define isnan(x) _isnan(x)
-#    define isinf(x) (!_finite(x) && !_isnan(x))
+     static __inline int isinf(double x) { return !_finite(x) && !_isnan(x); }
 #   endif
 #  else
 #   ifndef HAVE_ISNAN
