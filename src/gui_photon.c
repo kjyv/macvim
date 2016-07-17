@@ -2232,6 +2232,18 @@ gui_mch_draw_part_cursor(int w, int h, guicolor_T color)
     DRAW_END;
 }
 
+    int
+gui_mch_is_blinking(void)
+{
+    return blink_state != BLINK_NONE;
+}
+
+    int
+gui_mch_is_blink_off(void)
+{
+    return blink_state == BLINK_OFF;
+}
+
     void
 gui_mch_set_blinking(long wait, long on, long off)
 {

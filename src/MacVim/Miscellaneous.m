@@ -51,6 +51,7 @@ NSString *MMSidebarWidthKey             = @"MMSidebarWidth";
 NSString *MMSidebarVisibleKey           = @"MMSidebarVisible";
 NSString *MMNativeFullScreenKey         = @"MMNativeFullScreen";
 NSString *MMUseMouseTimeKey             = @"MMUseMouseTime";
+NSString *MMFullScreenFadeTimeKey       = @"MMFullScreenFadeTime";
 
 
 

@@ -1277,6 +1277,7 @@ $VIM_POSIX	vi_diff.txt	/*$VIM_POSIX*
 +mzscheme	various.txt	/*+mzscheme*
 +mzscheme/dyn	various.txt	/*+mzscheme\/dyn*
 +netbeans_intg	various.txt	/*+netbeans_intg*
++num64	various.txt	/*+num64*
 +odbeditor	various.txt	/*+odbeditor*
 +ole	various.txt	/*+ole*
 +packages	various.txt	/*+packages*
@@ -2059,6 +2060,8 @@ $VIM_POSIX	vi_diff.txt	/*$VIM_POSIX*
 :cat	eval.txt	/*:cat*
 :catch	eval.txt	/*:catch*
 :cb	quickfix.txt	/*:cb*
+:cbo	quickfix.txt	/*:cbo*
+:cbottom	quickfix.txt	/*:cbottom*
 :cbuffer	quickfix.txt	/*:cbuffer*
 :cc	quickfix.txt	/*:cc*
 :ccl	quickfix.txt	/*:ccl*
@@ -2093,6 +2096,8 @@ $VIM_POSIX	vi_diff.txt	/*$VIM_POSIX*
 :cl	quickfix.txt	/*:cl*
 :cla	quickfix.txt	/*:cla*
 :clast	quickfix.txt	/*:clast*
+:cle	motion.txt	/*:cle*
+:clearjumps	motion.txt	/*:clearjumps*
 :clist	quickfix.txt	/*:clist*
 :clo	windows.txt	/*:clo*
 :close	windows.txt	/*:close*
@@ -2409,6 +2414,8 @@ $VIM_POSIX	vi_diff.txt	/*$VIM_POSIX*
 :lat	undo.txt	/*:lat*
 :later	undo.txt	/*:later*
 :lb	quickfix.txt	/*:lb*
+:lbo	quickfix.txt	/*:lbo*
+:lbottom	quickfix.txt	/*:lbottom*
 :lbuffer	quickfix.txt	/*:lbuffer*
 :lc	editing.txt	/*:lc*
 :lcd	editing.txt	/*:lcd*
@@ -3397,6 +3404,7 @@ $VIM_POSIX	vi_diff.txt	/*$VIM_POSIX*
 <line1>	map.txt	/*<line1>*
 <line2>	map.txt	/*<line2>*
 <lt>	intro.txt	/*<lt>*
+<mods>	map.txt	/*<mods>*
 <nomodeline>	autocmd.txt	/*<nomodeline>*
 <q-args>	map.txt	/*<q-args>*
 <reg>	map.txt	/*<reg>*
@@ -4500,7 +4508,9 @@ E925	quickfix.txt	/*E925*
 E926	quickfix.txt	/*E926*
 E927	eval.txt	/*E927*
 E928	eval.txt	/*E928*
+E929	starting.txt	/*E929*
 E93	windows.txt	/*E93*
+E930	eval.txt	/*E930*
 E94	windows.txt	/*E94*
 E95	message.txt	/*E95*
 E96	diff.txt	/*E96*
@@ -4516,6 +4526,7 @@ Ex	intro.txt	/*Ex*
 Ex-mode	intro.txt	/*Ex-mode*
 Exuberant_ctags	tagsrch.txt	/*Exuberant_ctags*
 F	motion.txt	/*F*
+FALSE	eval.txt	/*FALSE*
 FAQ	intro.txt	/*FAQ*
 Farsi	farsi.txt	/*Farsi*
 FileAppendCmd	autocmd.txt	/*FileAppendCmd*
@@ -4732,6 +4743,7 @@ TOhtml-encoding-detect	syntax.txt	/*TOhtml-encoding-detect*
 TOhtml-performance	syntax.txt	/*TOhtml-performance*
 TOhtml-uncopyable-text	syntax.txt	/*TOhtml-uncopyable-text*
 TOhtml-wrap-text	syntax.txt	/*TOhtml-wrap-text*
+TRUE	eval.txt	/*TRUE*
 TSQL	ft_sql.txt	/*TSQL*
 TTpro-telnet	syntax.txt	/*TTpro-telnet*
 Tab	intro.txt	/*Tab*
@@ -4967,7 +4979,6 @@ added-win32-GUI	version5.txt	/*added-win32-GUI*
 aff-dic-format	spell.txt	/*aff-dic-format*
 after-directory	options.txt	/*after-directory*
 aleph	options.txt	/*aleph*
-alloc_fail()	eval.txt	/*alloc_fail()*
 alt	intro.txt	/*alt*
 alt-input	debugger.txt	/*alt-input*
 alt-movement	gui_mac.txt	/*alt-movement*
@@ -5089,6 +5100,7 @@ beval_bufnr-variable	eval.txt	/*beval_bufnr-variable*
 beval_col-variable	eval.txt	/*beval_col-variable*
 beval_lnum-variable	eval.txt	/*beval_lnum-variable*
 beval_text-variable	eval.txt	/*beval_text-variable*
+beval_winid-variable	eval.txt	/*beval_winid-variable*
 beval_winnr-variable	eval.txt	/*beval_winnr-variable*
 bitwise-function	usr_41.txt	/*bitwise-function*
 blockwise-examples	visual.txt	/*blockwise-examples*
@@ -5121,6 +5133,7 @@ buflisted()	eval.txt	/*buflisted()*
 bufloaded()	eval.txt	/*bufloaded()*
 bufname()	eval.txt	/*bufname()*
 bufnr()	eval.txt	/*bufnr()*
+bufwinid()	eval.txt	/*bufwinid()*
 bufwinnr()	eval.txt	/*bufwinnr()*
 bug-fixes-5	version5.txt	/*bug-fixes-5*
 bug-fixes-6	version6.txt	/*bug-fixes-6*
@@ -5295,6 +5308,7 @@ channel-callback	channel.txt	/*channel-callback*
 channel-close	channel.txt	/*channel-close*
 channel-commands	channel.txt	/*channel-commands*
 channel-demo	channel.txt	/*channel-demo*
+channel-functions	usr_41.txt	/*channel-functions*
 channel-mode	channel.txt	/*channel-mode*
 channel-more	channel.txt	/*channel-more*
 channel-open	channel.txt	/*channel-open*
@@ -5674,7 +5688,6 @@ dip	motion.txt	/*dip*
 dircolors.vim	syntax.txt	/*dircolors.vim*
 dis	motion.txt	/*dis*
 disable-menus	gui.txt	/*disable-menus*
-disable_char_avail_for_testing()	eval.txt	/*disable_char_avail_for_testing()*
 discard	editing.txt	/*discard*
 distribute-script	usr_41.txt	/*distribute-script*
 distribution	intro.txt	/*distribution*
@@ -5795,6 +5808,7 @@ exception-variable	eval.txt	/*exception-variable*
 exclusive	motion.txt	/*exclusive*
 exclusive-linewise	motion.txt	/*exclusive-linewise*
 executable()	eval.txt	/*executable()*
+execute()	eval.txt	/*execute()*
 execute-menus	gui.txt	/*execute-menus*
 exepath()	eval.txt	/*exepath()*
 exim	starting.txt	/*exim*
@@ -6423,6 +6437,7 @@ getcmdline()	eval.txt	/*getcmdline()*
 getcmdpos()	eval.txt	/*getcmdpos()*
 getcmdtype()	eval.txt	/*getcmdtype()*
 getcmdwintype()	eval.txt	/*getcmdwintype()*
+getcompletion()	eval.txt	/*getcompletion()*
 getcurpos()	eval.txt	/*getcurpos()*
 getcwd()	eval.txt	/*getcwd()*
 getfontname()	eval.txt	/*getfontname()*
@@ -6953,6 +6968,7 @@ job-control	channel.txt	/*job-control*
 job-err_cb	channel.txt	/*job-err_cb*
 job-err_io	channel.txt	/*job-err_io*
 job-exit_cb	channel.txt	/*job-exit_cb*
+job-functions	usr_41.txt	/*job-functions*
 job-in_io	channel.txt	/*job-in_io*
 job-options	channel.txt	/*job-options*
 job-out_cb	channel.txt	/*job-out_cb*
@@ -7278,6 +7294,7 @@ mouse-using	term.txt	/*mouse-using*
 mouse_col-variable	eval.txt	/*mouse_col-variable*
 mouse_lnum-variable	eval.txt	/*mouse_lnum-variable*
 mouse_win-variable	eval.txt	/*mouse_win-variable*
+mouse_winid-variable	eval.txt	/*mouse_winid-variable*
 movement	intro.txt	/*movement*
 ms-dos	os_msdos.txt	/*ms-dos*
 msdos	os_msdos.txt	/*msdos*
@@ -8706,6 +8723,8 @@ terminal-options	term.txt	/*terminal-options*
 terminfo	term.txt	/*terminfo*
 termresponse-variable	eval.txt	/*termresponse-variable*
 test-functions	usr_41.txt	/*test-functions*
+test_alloc_fail()	eval.txt	/*test_alloc_fail()*
+test_disable_char_avail()	eval.txt	/*test_disable_char_avail()*
 test_garbagecollect_now()	eval.txt	/*test_garbagecollect_now()*
 test_null_channel()	eval.txt	/*test_null_channel()*
 test_null_dict()	eval.txt	/*test_null_dict()*
@@ -8713,6 +8732,7 @@ test_null_job()	eval.txt	/*test_null_job()*
 test_null_list()	eval.txt	/*test_null_list()*
 test_null_partial()	eval.txt	/*test_null_partial()*
 test_null_string()	eval.txt	/*test_null_string()*
+test_settime()	eval.txt	/*test_settime()*
 testing-variable	eval.txt	/*testing-variable*
 tex-cchar	syntax.txt	/*tex-cchar*
 tex-cole	syntax.txt	/*tex-cole*
@@ -8743,6 +8763,7 @@ throw-from-catch	eval.txt	/*throw-from-catch*
 throw-variables	eval.txt	/*throw-variables*
 throwpoint-variable	eval.txt	/*throwpoint-variable*
 time-functions	usr_41.txt	/*time-functions*
+timer-functions	usr_41.txt	/*timer-functions*
 timer_start()	eval.txt	/*timer_start()*
 timer_stop()	eval.txt	/*timer_stop()*
 timestamp	editing.txt	/*timestamp*
@@ -8855,6 +8876,7 @@ v:beval_bufnr	eval.txt	/*v:beval_bufnr*
 v:beval_col	eval.txt	/*v:beval_col*
 v:beval_lnum	eval.txt	/*v:beval_lnum*
 v:beval_text	eval.txt	/*v:beval_text*
+v:beval_winid	eval.txt	/*v:beval_winid*
 v:beval_winnr	eval.txt	/*v:beval_winnr*
 v:char	eval.txt	/*v:char*
 v:charconvert_from	eval.txt	/*v:charconvert_from*
@@ -8889,6 +8911,7 @@ v:lnum	eval.txt	/*v:lnum*
 v:mouse_col	eval.txt	/*v:mouse_col*
 v:mouse_lnum	eval.txt	/*v:mouse_lnum*
 v:mouse_win	eval.txt	/*v:mouse_win*
+v:mouse_winid	eval.txt	/*v:mouse_winid*
 v:none	eval.txt	/*v:none*
 v:null	eval.txt	/*v:null*
 v:oldfiles	eval.txt	/*v:oldfiles*
@@ -9132,6 +9155,7 @@ viminfo-r	options.txt	/*viminfo-r*
 viminfo-read	starting.txt	/*viminfo-read*
 viminfo-read-write	starting.txt	/*viminfo-read-write*
 viminfo-s	options.txt	/*viminfo-s*
+viminfo-timestamp	starting.txt	/*viminfo-timestamp*
 viminfo-write	starting.txt	/*viminfo-write*
 vimrc	starting.txt	/*vimrc*
 vimrc-filetype	usr_05.txt	/*vimrc-filetype*

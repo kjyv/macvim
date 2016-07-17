@@ -386,7 +386,7 @@ EXTERN int	keep_filetype INIT(= FALSE);	/* value for did_filetype when
 
 /* When deleting the current buffer, another one must be loaded.  If we know
  * which one is preferred, au_new_curbuf is set to it */
-EXTERN buf_T	*au_new_curbuf INIT(= NULL);
+EXTERN bufref_T	au_new_curbuf INIT(= {NULL});
 
 /* When deleting a buffer/window and autocmd_busy is TRUE, do not free the
  * buffer/window. but link it in the list starting with
@@ -635,6 +635,13 @@ EXTERN int	exiting INIT(= FALSE);
 EXTERN int	really_exiting INIT(= FALSE);
 				/* TRUE when we are sure to exit, e.g., after
 				 * a deadly signal */
+#if defined(FEAT_AUTOCHDIR)
+EXTERN int	test_autochdir INIT(= FALSE);
+#endif
+#if defined(EXITFREE)
+EXTERN int	entered_free_all_mem INIT(= FALSE);
+				/* TRUE when in or after free_all_mem() */
+#endif
 /* volatile because it is used in signal handler deathtrap(). */
 EXTERN volatile int full_screen INIT(= FALSE);
 				/* TRUE when doing full-screen output
@@ -969,6 +976,7 @@ EXTERN cmdmod_T	cmdmod;			/* Ex command modifiers */
 
 EXTERN int	msg_silent INIT(= 0);	/* don't print messages */
 EXTERN int	emsg_silent INIT(= 0);	/* don't print error messages */
+EXTERN int	emsg_noredir INIT(= 0);	/* don't redirect error messages */
 EXTERN int	cmd_silent INIT(= FALSE); /* don't echo the command line */
 
 #if defined(FEAT_GUI_DIALOG) || defined(FEAT_CON_DIALOG) \
@@ -1104,6 +1112,7 @@ EXTERN FILE *redir_fd INIT(= NULL);	/* message redirection file */
 #ifdef FEAT_EVAL
 EXTERN int  redir_reg INIT(= 0);	/* message redirection register */
 EXTERN int  redir_vname INIT(= 0);	/* message redirection variable */
+EXTERN int  redir_execute INIT(= 0);	/* execute() redirection */
 #endif
 
 #ifdef FEAT_LANGMAP
@@ -1608,7 +1617,7 @@ EXTERN int xsmp_icefd INIT(= -1);   /* The actual connection */
 #endif
 
 /* For undo we need to know the lowest time possible. */
-EXTERN time_t starttime;
+EXTERN time_T starttime;
 
 #ifdef STARTUPTIME
 EXTERN FILE *time_fd INIT(= NULL);  /* where to write startup timing */
@@ -1633,6 +1642,14 @@ EXTERN int  alloc_fail_repeat INIT(= 0);
 EXTERN int  disable_char_avail_for_testing INIT(= 0);
 
 EXTERN int  in_free_unref_items INIT(= FALSE);
+#endif
+
+#ifdef FEAT_TIMERS
+EXTERN int  did_add_timer INIT(= FALSE);
+#endif
+
+#ifdef FEAT_EVAL
+EXTERN time_T time_for_testing INIT(= 0);
 #endif
 
 /*
