@@ -1,4 +1,4 @@
-*eval.txt*	For Vim version 7.4.  Last change: 2016 Jul 09
+*eval.txt*	For Vim version 7.4.  Last change: 2016 Aug 07
 
 
 		  VIM REFERENCE MANUAL	  by Bram Moolenaar
@@ -40,7 +40,7 @@ done, the features in this document are not available.	See |+eval| and
 There are nine types of variables:
 
 Number		A 32 or 64 bit signed number.  |expr-number| *Number*
-		64-bit Number is available only when compiled with the
+		64-bit Numbers are available only when compiled with the
 		|+num64| feature.
 		Examples:  -123  0x10  0177
 
@@ -140,9 +140,10 @@ You will not get an error if you try to change the type of a variable.
 
 1.2 Function references ~
 					*Funcref* *E695* *E718*
-A Funcref variable is obtained with the |function()| function.	It can be used
-in an expression in the place of a function name, before the parenthesis
-around the arguments, to invoke the function it refers to.  Example: >
+A Funcref variable is obtained with the |function()| function or created with
+the lambda expression |expr-lambda|.  It can be used in an expression in the
+place of a function name, before the parenthesis around the arguments, to
+invoke the function it refers to.  Example: >
 
 	:let Fn = function("MyFunc")
 	:echo Fn()
@@ -261,7 +262,7 @@ it.  To change a list in-place see |list-modification| below.
 
 
 Sublist ~
-
+							*sublist*
 A part of the List can be obtained by specifying the first and last index,
 separated by a colon in square brackets: >
 	:let shortlist = mylist[2:-1]	" get List [3, "four"]
@@ -694,6 +695,7 @@ Expression syntax summary, from least to most significant:
 	@r			contents of register 'r'
 	function(expr1, ...)	function call
 	func{ti}on(expr1, ...)	function call with curly braces
+	{args -> expr1}		lambda expression
 
 
 ".." indicates that the operations in this level can be concatenated.
@@ -988,10 +990,10 @@ Examples: >
 	:let s = line(".")[4:]		" from the fifth byte to the end
 	:let s = s[:-3]			" remove last two bytes
 <
-							*sublist* *slice*
+							*slice*
 If expr8 is a |List| this results in a new |List| with the items indicated by
 the indexes expr1a and expr1b.	This works like with a String, as explained
-just above, except that indexes out of range cause an error.  Examples: >
+just above. Also see |sublist| below.  Examples: >
 	:let l = mylist[:3]		" first four items
 	:let l = mylist[4:4]		" List with one item
 	:let l = mylist[:]		" shallow copy of a List
@@ -1206,6 +1208,63 @@ function call		*expr-function* *E116* *E118* *E119* *E120*
 function(expr1, ...)	function call
 See below |functions|.
 
+
+lambda expression				*expr-lambda* *lambda*
+-----------------
+{args -> expr1}		lambda expression
+
+A lambda expression creates a new unnamed function which returns the result of
+evaluating |expr1|.  Lambda expressions differ from |user-functions| in
+the following ways:
+
+1. The body of the lambda expression is an |expr1| and not a sequence of |Ex|
+   commands.
+2. The prefix "a:" should not be used for arguments.  E.g.: >
+	:let F = {arg1, arg2 -> arg1 - arg2}
+	:echo F(5, 2)
+<	3
+
+The arguments are optional.  Example: >
+	:let F = {-> 'error function'}
+	:echo F()
+<	error function
+							*closure*
+Lambda expressions can access outer scope variables and arguments.  This is
+often called a closure.  Example where "i" a and "a:arg" are used in a lambda
+while they exists in the function scope.  They remain valid even after the
+function returns: >
+	:function Foo(arg)
+	:  let i = 3
+	:  return {x -> x + i - a:arg}
+	:endfunction
+	:let Bar = Foo(4)
+	:echo Bar(6)
+<	5
+
+See also |:func-closure|.  Lambda and closure support can be checked with: >
+	if has('lambda')
+
+Examples for using a lambda expression with |sort()|, |map()| and |filter()|: >
+	:echo map([1, 2, 3], {idx, val -> val + 1})
+<	[2, 3, 4] >
+	:echo sort([3,7,2,1,4], {a, b -> a - b})
+<	[1, 2, 3, 4, 7]
+
+The lambda expression is also useful for Channel, Job and timer: >
+	:let timer = timer_start(500,
+			\ {-> execute("echo 'Handler called'", "")},
+			\ {'repeat': 3})
+<	Handler called
+	Handler called
+	Handler called
+
+Note how execute() is used to execute an Ex command.  That's ugly though.
+
+
+Lambda expressions have internal names like '<lambda>42'.  If you get an error
+for a lambda expression, you can find what it is with the following command: >
+	:function {'<lambda>42'}
+See also: |numbered-function|
 
 ==============================================================================
 3. Internal variable				*internal-variables* *E461*
@@ -1497,7 +1556,7 @@ v:false		A Number with value zero. Used to put "false" in JSON.  See
 			echo v:false
 <			v:false ~
 		That is so that eval() can parse the string back to the same
-		value.
+		value.  Read-only.
 
 					*v:fcs_reason* *fcs_reason-variable*
 v:fcs_reason	The reason why the |FileChangedShell| event was triggered.
@@ -1644,7 +1703,7 @@ v:none		An empty String. Used to put an empty item in JSON.  See
 			echo v:none
 <			v:none ~
 		That is so that eval() can parse the string back to the same
-		value.
+		value.  Read-only.
 
 					*v:null* *null-variable*
 v:null		An empty String. Used to put "null" in JSON.  See
@@ -1654,7 +1713,7 @@ v:null		An empty String. Used to put "null" in JSON.  See
 			echo v:null
 <			v:null ~
 		That is so that eval() can parse the string back to the same
-		value.
+		value.  Read-only.
 
 					*v:oldfiles* *oldfiles-variable*
 v:oldfiles	List of file names that is loaded from the |viminfo| file on
@@ -1789,6 +1848,27 @@ v:swapcommand	Normal mode command to be executed after a file has been
 		example, when jumping to a tag the value is ":tag tagname\r".
 		For ":edit +cmd file" the value is ":cmd\r".
 
+				*v:t_TYPE* *v:t_bool* *t_bool-varialble*
+v:t_bool	Value of Boolean type.  Read-only.  See: |type()|
+					*v:t_channel* *t_channel-varialble*
+v:t_channel	Value of Channel type.  Read-only.  See: |type()|
+					*v:t_dict* *t_dict-varialble*
+v:t_dict	Value of Dictionary type.  Read-only.  See: |type()|
+					*v:t_float* *t_float-varialble*
+v:t_float	Value of Float type.  Read-only.  See: |type()|
+					*v:t_func* *t_func-varialble*
+v:t_func	Value of Funcref type.  Read-only.  See: |type()|
+					*v:t_job* *t_job-varialble*
+v:t_job		Value of Job type.  Read-only.  See: |type()|
+					*v:t_list* *t_list-varialble*
+v:t_list	Value of List type.  Read-only.  See: |type()|
+					*v:t_none* *t_none-varialble*
+v:t_none	Value of None type.  Read-only.  See: |type()|
+					*v:t_number* *t_number-varialble*
+v:t_number	Value of Number type.  Read-only.  See: |type()|
+					*v:t_string* *t_string-varialble*
+v:t_string	Value of String type.  Read-only.  See: |type()|
+
 				*v:termresponse* *termresponse-variable*
 v:termresponse	The escape sequence returned by the terminal for the |t_RV|
 		termcap entry.	It is set when Vim receives an escape sequence
@@ -1831,7 +1911,7 @@ v:true		A Number with value one. Used to put "true" in JSON.  See
 			echo v:true
 <			v:true ~
 		That is so that eval() can parse the string back to the same
-		value.
+		value.  Read-only.
 						*v:val* *val-variable*
 v:val		Value of the current item of a |List| or |Dictionary|.	Only
 		valid while evaluating the expression used with |map()| and
@@ -1876,7 +1956,7 @@ USAGE				RESULT	DESCRIPTION	~
 abs({expr})			Float or Number  absolute value of {expr}
 acos({expr})			Float	arc cosine of {expr}
 add({list}, {item})		List	append {item} to |List| {list}
-and({expr}, {expr})		Number  bitwise AND
+and({expr}, {expr})		Number	bitwise AND
 append({lnum}, {string})	Number	append {string} below line {lnum}
 append({lnum}, {list})		Number	append lines {list} below line {lnum}
 argc()				Number	number of files in the argument list
@@ -1888,13 +1968,15 @@ assert_equal({exp}, {act} [, {msg}])     none  assert {exp} is equal to {act}
 assert_exception({error} [, {msg}])      none  assert {error} is in v:exception
 assert_fails({cmd} [, {error}])          none  assert {cmd} fails
 assert_false({actual} [, {msg}])         none  assert {actual} is false
+assert_inrange({lower}, {upper}, {actual} [, {msg}])
+				none	assert {actual} is inside the range
 assert_match({pat}, {text} [, {msg}])    none  assert {pat} matches {text}
 assert_notequal({exp}, {act} [, {msg}])  none  assert {exp} is not equal {act}
 assert_notmatch({pat}, {text} [, {msg}]) none  assert {pat} not matches {text}
 assert_true({actual} [, {msg}])          none  assert {actual} is true
 asin({expr})			Float	arc sine of {expr}
 atan({expr})			Float	arc tangent of {expr}
-atan2({expr}, {expr})		Float   arc tangent of {expr1} / {expr2}
+atan2({expr}, {expr})		Float	arc tangent of {expr1} / {expr2}
 browse({save}, {title}, {initdir}, {default})
 				String	put up a file requester
 browsedir({title}, {initdir})	String	put up a directory requester
@@ -1918,21 +2000,21 @@ ch_evalraw({handle}, {string} [, {options}])
 				any	evaluate {string} on raw {handle}
 ch_getbufnr({handle}, {what})	Number	get buffer number for {handle}/{what}
 ch_getjob({channel})		Job	get the Job of {channel}
-ch_info({handle})		String	info about channel  {handle}
+ch_info({handle})		String	info about channel {handle}
 ch_log({msg} [, {handle}])	none	write {msg} in the channel log file
 ch_logfile({fname} [, {mode}])	none	start logging channel activity
 ch_open({address} [, {options}])
-				Channel open a channel to {address}
-ch_read({handle} [, {options}]) String  read from  {handle}
+				Channel	open a channel to {address}
+ch_read({handle} [, {options}]) String	read from {handle}
 ch_readraw({handle} [, {options}])
-				String  read raw from  {handle}
+				String	read raw from {handle}
 ch_sendexpr({handle}, {expr} [, {options}])
 				any	send {expr} over JSON {handle}
 ch_sendraw({handle}, {string} [, {options}])
 				any	send {string} over raw {handle}
 ch_setoptions({handle}, {options})
 				none	set options for {handle}
-ch_status({handle})		String	status of channel  {handle}
+ch_status({handle})		String	status of channel {handle}
 changenr()			Number	current change number
 char2nr({expr}[, {utf8}])	Number	ASCII/UTF8 value of first char in {expr}
 cindent({lnum})			Number	C indent for line {lnum}
@@ -1947,7 +2029,7 @@ copy({expr})			any	make a shallow copy of {expr}
 cos({expr})			Float	cosine of {expr}
 cosh({expr})			Float	hyperbolic cosine of {expr}
 count({list}, {expr} [, {ic} [, {start}]])
-				Number	 count how many {expr} are in {list}
+				Number	count how many {expr} are in {list}
 cscope_connection([{num} , {dbpath} [, {prepend}]])
 				Number	checks existence of cscope connection
 cursor({lnum}, {col} [, {off}])
@@ -1964,7 +2046,7 @@ eval({string})			any	evaluate {string} into its value
 eventhandler()			Number	|TRUE| if inside an event handler
 executable({expr})		Number	1 if executable {expr} exists
 execute({command})		String	execute {command} and get the output
-exepath({expr})			String  full path of the command {expr}
+exepath({expr})			String	full path of the command {expr}
 exists({expr})			Number	|TRUE| if {expr} exists
 extend({expr1}, {expr2} [, {expr3}])
 				List/Dict insert items of {expr2} into {expr1}
@@ -1991,8 +2073,10 @@ foldlevel({lnum})		Number	fold level at {lnum}
 foldtext()			String	line displayed for closed fold
 foldtextresult({lnum})		String	text for closed fold at {lnum}
 foreground()			Number	bring the Vim window to the foreground
+funcref({name} [, {arglist}] [, {dict}])
+				Funcref	reference to function {name}
 function({name} [, {arglist}] [, {dict}])
-				Funcref reference to function {name}
+				Funcref	named reference to function {name}
 garbagecollect([{atexit}])	none	free memory, breaking cyclic references
 get({list}, {idx} [, {def}])	any	get item {idx} from {list} or {def}
 get({dict}, {key} [, {def}])	any	get item {key} from {dict} or {def}
@@ -2036,7 +2120,7 @@ getwinvar({nr}, {varname} [, {def}])
 				any	variable {varname} in window {nr}
 glob({expr} [, {nosuf} [, {list} [, {alllinks}]]])
 				any	expand file wildcards in {expr}
-glob2regpat({expr})		String  convert a glob pat into a search pat
+glob2regpat({expr})		String	convert a glob pat into a search pat
 globpath({path}, {expr} [, {nosuf} [, {list} [, {alllinks}]]])
 				String	do glob({expr}) for all dirs in {path}
 has({feature})			Number	|TRUE| if feature {feature} supported
@@ -2059,22 +2143,22 @@ index({list}, {expr} [, {start} [, {ic}]])
 input({prompt} [, {text} [, {completion}]])
 				String	get input from the user
 inputdialog({prompt} [, {text} [, {completion}]]])
-				String  like input() but in a GUI dialog
+				String	like input() but in a GUI dialog
 inputlist({textlist})		Number	let the user pick from a choice list
 inputrestore()			Number	restore typeahead
 inputsave()			Number	save and clear typeahead
-inputsecret({prompt} [, {text}]) String  like input() but hiding the text
+inputsecret({prompt} [, {text}]) String	like input() but hiding the text
 insert({list}, {item} [, {idx}]) List	insert {item} in {list} [before {idx}]
-invert({expr})			Number  bitwise invert
+invert({expr})			Number	bitwise invert
 isdirectory({directory})	Number	|TRUE| if {directory} is a directory
 islocked({expr})		Number	|TRUE| if {expr} is locked
-isnan({expr})			Number  |TRUE| if {expr} is NaN
+isnan({expr})			Number	|TRUE| if {expr} is NaN
 items({dict})			List	key-value pairs in {dict}
 job_getchannel({job})		Channel	get the channel handle for {job}
 job_info({job})			Dict	get information about {job}
 job_setoptions({job}, {options}) none	set options for {job}
 job_start({command} [, {options}])
-				Job	 start a job
+				Job	start a job
 job_status({job})		String	get the status of {job}
 job_stop({job} [, {how}])	Number	stop {job}
 join({list} [, {sep}])		String	join {list} items into one String
@@ -2085,7 +2169,7 @@ json_encode({expr})		String	encode JSON
 keys({dict})			List	keys in {dict}
 len({expr})			Number	the length of {expr}
 libcall({lib}, {func}, {arg})	String	call {func} in library {lib} with {arg}
-libcallnr({lib}, {func}, {arg})	Number  idem, but return a Number
+libcallnr({lib}, {func}, {arg})	Number	idem, but return a Number
 line({expr})			Number	line nr of cursor, last line or mark
 line2byte({lnum})		Number	byte count of line {lnum}
 lispindent({lnum})		Number	Lisp indent for line {lnum}
@@ -2123,7 +2207,7 @@ mode([expr])			String	current editing mode
 mzeval({expr})			any	evaluate |MzScheme| expression
 nextnonblank({lnum})		Number	line nr of non-blank line >= {lnum}
 nr2char({expr}[, {utf8}])	String	single char with ASCII/UTF8 value {expr}
-or({expr}, {expr})		Number  bitwise OR
+or({expr}, {expr})		Number	bitwise OR
 pathshorten({expr})		String	shorten directory names in a path
 perleval({expr})		any	evaluate |Perl| expression
 pow({x}, {y})			Float	{x} to the power of {y}
@@ -2231,7 +2315,7 @@ synID({lnum}, {col}, {trans})	Number	syntax ID at {lnum} and {col}
 synIDattr({synID}, {what} [, {mode}])
 				String	attribute {what} of syntax ID {synID}
 synIDtrans({synID})		Number	translated syntax ID of {synID}
-synconcealed({lnum}, {col})	List    info about concealing
+synconcealed({lnum}, {col})	List	info about concealing
 synstack({lnum}, {col})		List	stack of syntax IDs at {lnum} and {col}
 system({expr} [, {input}])	String	output of shell command/filter {expr}
 systemlist({expr} [, {input}])	List	output of shell command/filter {expr}
@@ -2245,6 +2329,7 @@ tanh({expr})			Float	hyperbolic tangent of {expr}
 tempname()			String	name for a temporary file
 test_alloc_fail({id}, {countdown}, {repeat})
 				none	make memory allocation fail
+test_autochdir()		none	enable 'autochdir' during startup
 test_disable_char_avail({expr}) none	test without typeahead
 test_garbagecollect_now()	none	free memory right now for testing
 test_null_channel()		Channel	null value for testing
@@ -2254,9 +2339,12 @@ test_null_list()		List	null value for testing
 test_null_partial()		Funcref	null value for testing
 test_null_string()		String	null value for testing
 test_settime({expr})		none	set current time for testing
+timer_info([{id}])		List	information about timers
+timer_pause({id}, {pause})	none	pause or unpause a timer
 timer_start({time}, {callback} [, {options}])
 				Number	create a timer
 timer_stop({timer})		none	stop a timer
+timer_stopall()			none	stop all timers
 tolower({expr})			String	the String {expr} switched to lowercase
 toupper({expr})			String	the String {expr} switched to uppercase
 tr({src}, {fromstr}, {tostr})	String	translate chars of {src} in {fromstr}
@@ -2288,7 +2376,7 @@ winwidth({nr})			Number	width of window {nr}
 wordcount()			Dict	get byte/char/word statistics
 writefile({list}, {fname} [, {flags}])
 				Number	write list of lines to file {fname}
-xor({expr}, {expr})		Number  bitwise XOR
+xor({expr}, {expr})		Number	bitwise XOR
 
 
 abs({expr})							*abs()*
@@ -2419,8 +2507,16 @@ assert_false({actual} [, {msg}])				*assert_false()*
 		|v:errors|, like with |assert_equal()|.
 		A value is false when it is zero. When {actual} is not a
 		number the assert fails.
-		When {msg} is omitted an error in the form "Expected False but
-		got {actual}" is produced.
+		When {msg} is omitted an error in the form
+		"Expected False but got {actual}" is produced.
+
+assert_inrange({lower}, {upper}, {actual} [, {msg}])	 *assert_inrange()*
+		This asserts number values.  When {actual}  is lower than
+		{lower} or higher than {upper} an error message is added to
+		|v:errors|.
+		When {msg} is omitted an error in the form
+		"Expected range {lower} - {upper}, but got {actual}" is
+		produced.
 
 								*assert_match()*
 assert_match({pattern}, {actual} [, {msg}])
@@ -2435,8 +2531,8 @@ assert_match({pattern}, {actual} [, {msg}])
 		Use "^" and "$" to match with the start and end of the text.
 		Use both to match the whole text.
 
-		When {msg} is omitted an error in the form "Pattern {pattern}
-		does not match {actual}" is produced.
+		When {msg} is omitted an error in the form
+		"Pattern {pattern} does not match {actual}" is produced.
 		Example: >
 	assert_match('^f.*o$', 'foobar')
 <		Will result in a string to be added to |v:errors|:
@@ -3278,7 +3374,8 @@ execute({command} [, {silent}])					*execute()*
 			"silent"	`:silent` used
 			"silent!"	`:silent!` used
 		The default is 'silent'.  Note that with "silent!", unlike
-		`:redir`, error messages are dropped.
+		`:redir`, error messages are dropped.  When using an external
+		command the screen may be messed up, use `system()` instead.
 							*E930*
 		It is not possible to use `:redir` anywhere in {command}.
 
@@ -3298,9 +3395,13 @@ exepath({expr})						*exepath()*
 		an empty string is returned.
 
 							*exists()*
-exists({expr})	The result is a Number, which is |TRUE| if {expr} is
-		defined, zero otherwise.  The {expr} argument is a string,
-		which contains one of these:
+exists({expr})	The result is a Number, which is |TRUE| if {expr} is defined,
+		zero otherwise.
+
+		For checking for a supported feature use |has()|.
+		For checking if a file exists use |filereadable()|.
+
+		The {expr} argument is a string, which contains one of these:
 			&option-name	Vim option (only checks if it exists,
 					not if it really works)
 			+option-name	Vim option that works.
@@ -3348,7 +3449,6 @@ exists({expr})	The result is a Number, which is |TRUE| if {expr} is
 					event and pattern.
 			##event		autocommand for this event is
 					supported.
-		For checking for a supported feature use |has()|.
 
 		Examples: >
 			exists("&shortname")
@@ -3760,6 +3860,15 @@ foreground()	Move the Vim window to the foreground.	Useful when sent from
 		{only in the Win32, Athena, Motif and GTK GUI versions and the
 		Win32 console version}
 
+						*funcref()*
+funcref({name} [, {arglist}] [, {dict}])
+		Just like |function()|, but the returned Funcref will lookup
+		the function by reference, not by name.  This matters when the
+		function {name} is redefined later.
+
+		Unlike |function()|, {name} must be an existing user function.
+		Also for autoloaded functions. {name} cannot be a builtin
+		function.
 
 					*function()* *E700* *E922* *E923*
 function({name} [, {arglist}] [, {dict}])
@@ -3767,12 +3876,16 @@ function({name} [, {arglist}] [, {dict}])
 		{name} can be the name of a user defined function or an
 		internal function.
 
-		{name} can also be a Funcref, also a partial.  When it is a
+		{name} can also be a Funcref or a partial.  When it is a
 		partial the dict stored in it will be used and the {dict}
 		argument is not allowed. E.g.: >
 			let FuncWithArg = function(dict.Func, [arg])
 			let Broken = function(dict.Func, [arg], dict)
 <
+		When using the Funcref the function will be found by {name},
+		also when it was redefined later.  Use |funcref()| to keep the
+		same function.
+
 		When {arglist} or {dict} is present this creates a partial.
 		That means the argument list and/or the dictionary is stored in
 		the Funcref and will be used when the Funcref is called.
@@ -5369,7 +5482,8 @@ matchadd({group}, {pattern}[, {priority}[, {id}[, {dict}]]])
 		available from |getmatches()|.	All matches can be deleted in
 		one operation by |clearmatches()|.
 
-matchaddpos({group}, {pos}[, {priority}[, {id}[, {dict}]]])		*matchaddpos()*
+							*matchaddpos()*
+matchaddpos({group}, {pos}[, {priority}[, {id}[, {dict}]]])
 		Same as |matchadd()|, but requires a list of positions {pos}
 		instead of a pattern. This command is faster than |matchadd()|
 		because it does not require to handle regular expressions and
@@ -6101,6 +6215,7 @@ screenrow()							*screenrow()*
 		The result is a Number, which is the current screen row of the
 		cursor.  The top line has number one.
 		This function is mainly used for testing.
+		Alternatively you can use |winline()|.
 
 		Note: Same restrictions as with |screencol()|.
 
@@ -7084,15 +7199,23 @@ substitute({expr}, {pat}, {sub}, {flags})		*substitute()*
 		unmodified.
 
 		Example: >
-			:let &path = substitute(&path, ",\\=[^,]*$", "", "")
+		   :let &path = substitute(&path, ",\\=[^,]*$", "", "")
 <		This removes the last component of the 'path' option. >
-			:echo substitute("testing", ".*", "\\U\\0", "")
+		   :echo substitute("testing", ".*", "\\U\\0", "")
 <		results in "TESTING".
 
 		When {sub} starts with "\=", the remainder is interpreted as
 		an expression. See |sub-replace-expression|.  Example: >
-			:echo substitute(s, '%\(\x\x\)',
+		   :echo substitute(s, '%\(\x\x\)',
 			   \ '\=nr2char("0x" . submatch(1))', 'g')
+
+<		When {sub} is a Funcref that function is called, with one
+		optional argument.  Example: >
+		   :echo substitute(s, '%\(\x\x\)', SubNr, 'g')
+<		The optional argument is a list which contains the whole
+		matched string and up to nine submatches,like what
+		|submatch()| returns. Example: >
+		   :echo substitute(s, '\(\x\x\)', {m -> '0x' . m[1]}, 'g')
 
 synID({lnum}, {col}, {trans})				*synID()*
 		The result is a Number, which is the syntax ID at the position
@@ -7202,7 +7325,8 @@ system({expr} [, {input}])				*system()* *E677*
 		in a way |writefile()| does with {binary} set to "b" (i.e.
 		with a newline between each list item with newlines inside
 		list items converted to NULs).  
-		Pipes are not used.
+
+		Pipes are not used, the 'shelltemp' option is not used.
 
 		When prepended by |:silent| the shell will not be set to
 		cooked mode.  This is meant to be used for commands that do
@@ -7374,8 +7498,11 @@ test_alloc_fail({id}, {countdown}, {repeat})		*test_alloc_fail()*
 		let memory allocation fail {repeat} times.  When {repeat} is
 		smaller than one it fails one time.
 
+test_autochdir()					*test_autochdir()*
+		Set a flag to enable the effect of 'autochdir' before Vim
+		startup has finished.
 
-					*test_disable_char_avail()*
+						*test_disable_char_avail()*
 test_disable_char_avail({expr})
 		When {expr} is 1 the internal char_avail() function will
 		return |FALSE|.  When {expr} is 0 the char_avail() function will
@@ -7411,9 +7538,45 @@ test_null_string()					*test_null_string()*
 
 test_settime({expr})					*test_settime()*
 		Set the time Vim uses internally.  Currently only used for
-		timestamps in the history, as they are used in viminfo.
+		timestamps in the history, as they are used in viminfo, and
+		for undo.
 		{expr} must evaluate to a number.  When the value is zero the
 		normal behavior is restored.
+
+							*timer_info()*
+timer_info([{id}])
+		Return a list with information about timers.
+		When {id} is given only information about this timer is
+		returned.  When timer {id} does not exist an empty list is
+		returned.
+		When {id} is omitted information about all timers is returned.
+
+		For each timer the information is stored in a Dictionary with
+		these items:
+		    "id"	    the timer ID
+		    "time"	    time the timer was started with
+		    "remaining"	    time until the timer fires
+		    "repeat"	    number of times the timer will still fire;
+				    -1 means forever
+		    "callback"	    the callback
+		    "paused"	    1 if the timer is paused, 0 otherwise
+
+		{only available when compiled with the |+timers| feature}
+
+timer_pause({timer}, {paused})				*timer_pause()*
+		Pause or unpause a timer.  A paused timer does not invoke its
+		callback, while the time it would is not changed.  Unpausing a
+		timer may cause the callback to be invoked almost immediately
+		if enough time has passed.
+
+		Pausing a timer is useful to avoid the callback to be called
+		for a short time.
+
+		If {paused} evaluates to a non-zero Number or a non-empty
+		String, then the timer is paused, otherwise it is unpaused.
+		See |non-zero-arg|.
+
+		{only available when compiled with the |+timers| feature}
 
 							*timer_start()*
 timer_start({time}, {callback} [, {options}])
@@ -7440,12 +7603,22 @@ timer_start({time}, {callback} [, {options}])
 				\ {'repeat': 3})
 <		This will invoke MyHandler() three times at 500 msec
 		intervals.
+
 		{only available when compiled with the |+timers| feature}
 
 timer_stop({timer})					*timer_stop()*
 		Stop a timer.  The timer callback will no longer be invoked.
 		{timer} is an ID returned by timer_start(), thus it must be a
-		Number.
+		Number.  If {timer} does not exist there is no error.
+
+		{only available when compiled with the |+timers| feature}
+
+timer_stopall()						*timer_stopall()*
+		Stop all timers.  The timer callbacks will no longer be
+		invoked.  Useful if some timers is misbehaving.  If there are
+		no timers there is no error.
+
+		{only available when compiled with the |+timers| feature}
 
 tolower({expr})						*tolower()*
 		The result is a copy of the String given, with all uppercase
@@ -7485,18 +7658,20 @@ trunc({expr})							*trunc()*
 		{only available when compiled with the |+float| feature}
 		
 							*type()*
-type({expr})	The result is a Number, depending on the type of {expr}:
-			Number:	    0
-			String:	    1
-			Funcref:    2
-			List:	    3
-			Dictionary: 4
-			Float:	    5
-			Boolean:    6 (v:false and v:true)
-			None	    7 (v:null and v:none)
-			Job	    8
-			Channel	    9
-		To avoid the magic numbers it should be used this way: >
+type({expr})	The result is a Number representing the type of {expr}.
+		Instead of using the number directly, it is better to use the
+		v:t_ variable that has the value:
+			Number:	    0  |v:t_number|
+			String:	    1  |v:t_string|
+			Funcref:    2  |v:t_func|
+			List:	    3  |v:t_list|
+			Dictionary: 4  |v:t_dict|
+			Float:	    5  |v:t_float|
+			Boolean:    6  |v:t_bool| (v:false and v:true)
+			None	    7  |v:t_none| (v:null and v:none)
+			Job	    8  |v:t_job|
+			Channel	    9  |v:t_channel|
+		For backward compatibility, this method can be used: >
 			:if type(myvar) == type(0)
 			:if type(myvar) == type("")
 			:if type(myvar) == type(function("tr"))
@@ -7505,6 +7680,8 @@ type({expr})	The result is a Number, depending on the type of {expr}:
 			:if type(myvar) == type(0.0)
 			:if type(myvar) == type(v:false)
 			:if type(myvar) == type(v:none)
+<		To check if the v:t_ variables exist use this: >
+			:if exists('v:t_number')
 
 undofile({name})					*undofile()*
 		Return the name of the undo file that would be used for a file
@@ -7894,8 +8071,6 @@ diff			Compiled with |vimdiff| and 'diff' support.
 digraphs		Compiled with support for digraphs.
 directx			Compiled with support for Direct-X and 'renderoptions'.
 dnd			Compiled with support for the "~ register |quote_~|.
-dos16			16 bits DOS version of Vim.
-dos32			32 bits DOS (DJGPP) version of Vim.
 ebcdic			Compiled on a machine with ebcdic character set.
 emacs_tags		Compiled with support for Emacs tags.
 eval			Compiled with expression evaluation support.  Always
@@ -7936,6 +8111,7 @@ insert_expand		Compiled with support for CTRL-X expansion commands in
 			Insert mode.
 jumplist		Compiled with |jumplist| support.
 keymap			Compiled with 'keymap' support.
+lambda			Compiled with |lambda| support.
 langmap			Compiled with 'langmap' support.
 libcall			Compiled with |libcall()| support.
 linebreak		Compiled with 'linebreak', 'breakat', 'showbreak' and
@@ -7971,7 +8147,6 @@ netbeans_intg		Compiled with support for |netbeans|.
 num64			Compiled with 64-bit |Number| support.
 odbeditor               Compiled with |odbeditor| support.
 ole			Compiled with OLE automation support for Win32.
-os2			OS/2 version of Vim.
 packages		Compiled with |packages| support.
 path_extra		Compiled with up/downwards search in 'path' and 'tags'
 perl			Compiled with Perl interface.
@@ -8118,7 +8293,7 @@ last defined. Example: >
 See |:verbose-cmd| for more information.
 
 						*E124* *E125* *E853* *E884*
-:fu[nction][!] {name}([arguments]) [range] [abort] [dict]
+:fu[nction][!] {name}([arguments]) [range] [abort] [dict] [closure]
 			Define a new function by the name {name}.  The name
 			must be made of alphanumeric characters and '_', and
 			must start with a capital or "s:" (see above).  Note
@@ -8161,6 +8336,28 @@ See |:verbose-cmd| for more information.
 			be invoked through an entry in a |Dictionary|.	The
 			local variable "self" will then be set to the
 			dictionary.  See |Dictionary-function|.
+						*:func-closure* *E932*
+			When the [closure] argument is added, the function
+			can access variables and arguments from the outer
+			scope.  This is usually called a closure.  In this
+			example Bar() uses "x" from the scope of Foo().  It
+			remains referenced even after Foo() returns: >
+				:function! Foo()
+				:  let x = 0
+				:  function! Bar() closure
+				:    let x += 1
+				:    return x
+				:  endfunction
+				:  return funcref('Bar')
+				:endfunction
+
+				:let F = Foo()
+				:echo F()
+<				1 >
+				:echo F()
+<				2 >
+				:echo F()
+<				3
 
 						*function-search-undo*
 			The last used search pattern and the redo command "."
@@ -8172,7 +8369,7 @@ See |:verbose-cmd| for more information.
 :endf[unction]		The end of a function definition.  Must be on a line
 			by its own, without other commands.
 
-					*:delf* *:delfunction* *E130* *E131*
+				*:delf* *:delfunction* *E130* *E131* *E933*
 :delf[unction] {name}	Delete function {name}.
 			{name} can also be a |Dictionary| entry that is a
 			|Funcref|: >
@@ -8208,10 +8405,10 @@ can be 0).  "a:000" is set to a |List| that contains these arguments.  Note
 that "a:1" is the same as "a:000[0]".
 								*E742*
 The a: scope and the variables in it cannot be changed, they are fixed.
-However, if a |List| or |Dictionary| is used, you can change their contents.
-Thus you can pass a |List| to a function and have the function add an item to
-it.  If you want to make sure the function cannot change a |List| or
-|Dictionary| use |:lockvar|.
+However, if a composite type is used, such as |List| or |Dictionary| , you can
+change their contents.  Thus you can pass a |List| to a function and have the
+function add an item to it.  If you want to make sure the function cannot
+change a |List| or |Dictionary| use |:lockvar|.
 
 When not using "...", the number of arguments in a function call must be equal
 to the number of named arguments.  When using "...", the number of arguments
@@ -8223,9 +8420,8 @@ until the matching |:endfunction|.  It is allowed to define another function
 inside a function body.
 
 							*local-variables*
-Inside a function variables can be used.  These are local variables, which
-will disappear when the function returns.  Global variables need to be
-accessed with "g:".
+Inside a function local variables can be used.  These will disappear when the
+function returns.  Global variables need to be accessed with "g:".
 
 Example: >
   :function Table(title, ...)

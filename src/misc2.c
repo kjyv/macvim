@@ -851,7 +851,7 @@ alloc_clear(unsigned size)
     char_u *
 alloc_check(unsigned size)
 {
-#if !defined(UNIX) && !defined(__EMX__)
+#if !defined(UNIX)
     if (sizeof(int) == 2 && size > 0x7fff)
     {
 	/* Don't hide this message */
@@ -1217,11 +1217,18 @@ free_all_mem(void)
 	if (delete_first_msg() == FAIL)
 	    break;
 
+# ifdef FEAT_JOB_CHANNEL
+    channel_free_all();
+# endif
+#ifdef FEAT_TIMERS
+    timer_free_all();
+#endif
 # ifdef FEAT_EVAL
+    /* must be after channel_free_all() with unrefs partials */
     eval_clear();
 # endif
 # ifdef FEAT_JOB_CHANNEL
-    channel_free_all();
+    /* must be after eval_clear() with unrefs jobs */
     job_free_all();
 # endif
 

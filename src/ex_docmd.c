@@ -122,6 +122,7 @@ static int	getargopt(exarg_T *eap);
 # define ex_cfile		ex_ni
 # define qf_list		ex_ni
 # define qf_age			ex_ni
+# define qf_history		ex_ni
 # define ex_helpgrep		ex_ni
 # define ex_vimgrep		ex_ni
 #endif
@@ -1714,7 +1715,7 @@ current_win_nr(win_T *win)
     win_T	*wp;
     int		nr = 0;
 
-    for (wp = firstwin; wp != NULL; wp = wp->w_next)
+    FOR_ALL_WINDOWS(wp)
     {
 	++nr;
 	if (wp == win)
@@ -1729,7 +1730,7 @@ current_tab_nr(tabpage_T *tab)
     tabpage_T	*tp;
     int		nr = 0;
 
-    for (tp = first_tabpage; tp != NULL; tp = tp->tp_next)
+    FOR_ALL_TABPAGES(tp)
     {
 	++nr;
 	if (tp == tab)
@@ -1960,7 +1961,7 @@ do_one_cmd(
 #endif
 			    continue;
 			}
-			if (!checkforcmd(&ea.cmd, "noswapfile", 6))
+			if (!checkforcmd(&ea.cmd, "noswapfile", 3))
 			    break;
 			cmdmod.noswapfile = TRUE;
 			continue;
@@ -2349,7 +2350,7 @@ do_one_cmd(
 	vim_free(p);
 	/* If the autocommands did something and didn't cause an error, try
 	 * finding the command again. */
-	p = (ret && !aborting()) ? find_command(&ea, NULL) : NULL;
+	p = (ret && !aborting()) ? find_command(&ea, NULL) : ea.cmd;
     }
 #endif
 
@@ -7289,7 +7290,7 @@ ex_close(exarg_T *eap)
 	    if (eap->addr_count == 0)
 		ex_win_close(eap->forceit, curwin, NULL);
 	    else {
-		for (win = firstwin; win != NULL; win = win->w_next)
+		FOR_ALL_WINDOWS(win)
 		{
 		    winnr++;
 		    if (winnr == eap->line2)
@@ -7311,7 +7312,7 @@ ex_pclose(exarg_T *eap)
 {
     win_T	*win;
 
-    for (win = firstwin; win != NULL; win = win->w_next)
+    FOR_ALL_WINDOWS(win)
 	if (win->w_p_pvw)
 	{
 	    ex_win_close(eap->forceit, win, NULL);
@@ -7431,7 +7432,7 @@ ex_tabonly(exarg_T *eap)
 	     * up the lists. */
 	    for (done = 0; done < 1000; ++done)
 	    {
-		for (tp = first_tabpage; tp != NULL; tp = tp->tp_next)
+		FOR_ALL_TABPAGES(tp)
 		    if (tp->tp_topframe != topframe)
 		    {
 			tabpage_close_other(tp, eap->forceit);
@@ -7489,6 +7490,10 @@ tabpage_close_other(tabpage_T *tp, int forceit)
 	if (!valid_tabpage(tp) || tp->tp_firstwin == wp)
 	    break;
     }
+
+#ifdef FEAT_AUTOCMD
+    apply_autocmds(EVENT_TABCLOSED, NULL, NULL, FALSE, curbuf);
+#endif
 
     redraw_tabline = TRUE;
     if (h != tabline_height())
@@ -7556,7 +7561,7 @@ ex_hide(exarg_T *eap)
 		int	winnr = 0;
 		win_T	*win;
 
-		for (win = firstwin; win != NULL; win = win->w_next)
+		FOR_ALL_WINDOWS(win)
 		{
 		    winnr++;
 		    if (winnr == eap->line2)
@@ -7731,11 +7736,7 @@ ex_shell(exarg_T *eap UNUSED)
  * list. This function takes over responsibility for freeing the list.
  *
  * XXX The list is made into the argument list. This is freed using
- * FreeWild(), which does a series of vim_free() calls, unless the two defines
- * __EMX__ and __ALWAYS_HAS_TRAILING_NUL_POINTER are set. In this case, a
- * routine _fnexplodefree() is used. This may cause problems, but as the drop
- * file functionality is (currently) not in EMX this is not presently a
- * problem.
+ * FreeWild(), which does a series of vim_free() calls.
  */
     void
 handle_drop(
@@ -7869,7 +7870,7 @@ alist_new(void)
 # endif
 #endif
 
-#if (!defined(UNIX) && !defined(__EMX__)) || defined(PROTO)
+#if !defined(UNIX) || defined(PROTO)
 /*
  * Expand the file names in the global argument list.
  * If "fnum_list" is not NULL, use "fnum_list[fnum_len]" as a list of buffer
@@ -8708,7 +8709,7 @@ ex_syncbind(exarg_T *eap UNUSED)
     if (curwin->w_p_scb)
     {
 	topline = curwin->w_topline;
-	for (wp = firstwin; wp; wp = wp->w_next)
+	FOR_ALL_WINDOWS(wp)
 	{
 	    if (wp->w_p_scb && wp->w_buffer)
 	    {
@@ -8729,7 +8730,7 @@ ex_syncbind(exarg_T *eap UNUSED)
     /*
      * Set all scrollbind windows to the same topline.
      */
-    for (curwin = firstwin; curwin; curwin = curwin->w_next)
+    FOR_ALL_WINDOWS(curwin)
     {
 	if (curwin->w_p_scb)
 	{
@@ -10987,7 +10988,7 @@ makeopens(
 	return FAIL;
 
     /* Now put the other buffers into the buffer list */
-    for (buf = firstbuf; buf != NULL; buf = buf->b_next)
+    FOR_ALL_BUFFERS(buf)
     {
 	if (!(only_save_windows && buf->b_nwindows == 0)
 		&& !(buf->b_help && !(ssop_flags & SSOP_HELP))

@@ -2,7 +2,7 @@
 " You can also use this as a start for your own set of menus.
 "
 " Maintainer:	Bram Moolenaar <Bram@vim.org>
-" Last Change:	2014 May 22
+" Last Change:	2016 Jul 27
 
 " Note that ":an" (short for ":anoremenu") is often used to make a menu work
 " in all modes and avoid side effects from mappings defined by the user.
@@ -234,7 +234,7 @@ an 20.435	 &Edit.Startup\ &Settings		:call <SID>EditVimrc()<CR>
 fun! s:EditVimrc()
   if $MYVIMRC != ''
     let fname = $MYVIMRC
-  elseif has("win32") || has("dos32") || has("dos16") || has("os2")
+  elseif has("win32")
     if $HOME != ''
       let fname = $HOME . "/_vimrc"
     else
@@ -437,7 +437,7 @@ elseif has("gui_macvim")
   an 20.475.20 &Edit.Font.-SEP5-               <Nop>
   an 20.475.30 &Edit.Font.Bigger               <Nop>
   an 20.475.40 &Edit.Font.Smaller              <Nop>
-  an 20.480 &Edit.Special\ Characters\.\.\.    <Nop>
+  an 20.480 &Edit.Emoji\ &&\ Symbols           <Nop>
 endif
 
 " Programming menu
@@ -619,7 +619,7 @@ endfun
 func! s:XxdFind()
   if !exists("g:xxdprogram")
     " On the PC xxd may not be in the path but in the install directory
-    if (has("win32") || has("dos32")) && !executable("xxd")
+    if has("win32") && !executable("xxd")
       let g:xxdprogram = $VIMRUNTIME . (&shellslash ? '/' : '\') . "xxd.exe"
     else
       let g:xxdprogram = "xxd"
@@ -1213,7 +1213,7 @@ if has("gui_macvim")
   macm Edit.Font.Show\ Fonts			action=orderFrontFontPanel:
   macm Edit.Font.Bigger				key=<D-=> action=fontSizeUp:
   macm Edit.Font.Smaller			key=<D--> action=fontSizeDown:
-  macm Edit.Special\ Characters\.\.\.		key=<D-M-t> action=orderFrontCharacterPalette:
+  macm Edit.Emoji\ &&\ Symbols			key=<D-C-Space> action=orderFrontCharacterPalette:
 
   macm Tools.Spelling.To\ Next\ error<Tab>]s	key=<D-;>
   macm Tools.Spelling.Suggest\ Corrections<Tab>z=   key=<D-:>
