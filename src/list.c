@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -885,7 +885,7 @@ failret:
 }
 
 /*
- * Write list of strings to file
+ * Write "list" of strings to file "fd".
  */
     int
 write_list(FILE *fd, list_T *list, int binary)

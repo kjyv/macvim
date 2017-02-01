@@ -202,3 +202,36 @@ func Test_diffget_diffput()
   bwipe!
   enew!
 endfunc
+
+func Test_diffoff()
+  enew!
+  call setline(1, ['Two', 'Three'])
+  let normattr = screenattr(1, 1)
+  diffthis
+  botright vert new
+  call setline(1, ['One', '', 'Two', 'Three'])
+  diffthis
+  redraw
+  diffoff!
+  redraw
+  call assert_equal(normattr, screenattr(1, 1))
+  bwipe!
+  bwipe!
+endfunc
+
+func Test_setting_cursor()
+  new Xtest1
+  put =range(1,90)
+  wq
+  new Xtest2
+  put =range(1,100)
+  wq
+  
+  tabe Xtest2
+  $
+  diffsp Xtest1
+  tabclose
+
+  call delete('Xtest1')
+  call delete('Xtest2')
+endfunc

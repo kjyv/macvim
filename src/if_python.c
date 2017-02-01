@@ -933,13 +933,17 @@ Python_Init(void)
 	    EMSG(_("E263: Sorry, this command is disabled, the Python library could not be loaded."));
 	    goto fail;
 	}
-#endif
 
-#ifdef PYTHON_HOME
-# ifdef DYNAMIC_PYTHON
-	if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
-# endif
+	if (p_pyhome && *p_pyhome != '\0')
+	    Py_SetPythonHome((char *)p_pyhome);
+# ifdef PYTHON_HOME
+	else if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
 	    Py_SetPythonHome(PYTHON_HOME);
+# endif
+#else
+# ifdef PYTHON_HOME
+	Py_SetPythonHome(PYTHON_HOME);
+# endif
 #endif
 
 	init_structs();
@@ -1118,6 +1122,9 @@ ex_python(exarg_T *eap)
 {
     char_u *script;
 
+    if (p_pyx == 0)
+	p_pyx = 2;
+
     script = script_get(eap, eap->arg);
     if (!eap->skip)
     {
@@ -1140,6 +1147,9 @@ ex_pyfile(exarg_T *eap)
     static char buffer[BUFFER_SIZE];
     const char *file = (char *)eap->arg;
     char *p;
+
+    if (p_pyx == 0)
+	p_pyx = 2;
 
     /* Have to do it like this. PyRun_SimpleFile requires you to pass a
      * stdio file pointer, but Vim and the Python DLL are compiled with
@@ -1179,6 +1189,9 @@ ex_pyfile(exarg_T *eap)
     void
 ex_pydo(exarg_T *eap)
 {
+    if (p_pyx == 0)
+	p_pyx = 2;
+
     DoPyCommand((char *)eap->arg,
 	    (rangeinitializer) init_range_cmd,
 	    (runner)run_do,

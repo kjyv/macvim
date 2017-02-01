@@ -6049,7 +6049,7 @@ __:
 eof
 	    	    eval "`cd ${PYTHON_CONFDIR} && make -f "${tmp_mkf}" __ | sed '/ directory /d'`"
 	    rm -f -- "${tmp_mkf}"
-	    if test "x$MACOSX" = "xyes" && ${vi_cv_path_python} -c \
+	    if test "x$MACOSX" = "xyes" && test -n "${python_PYTHONFRAMEWORK}" && ${vi_cv_path_python} -c \
 		"import sys; sys.exit(${vi_cv_var_python_version} < 2.3)"; then
 	      vi_cv_path_python_plibs="-framework Python"
 	      if test "x${vi_cv_path_python}" != "x/usr/bin/python" && test -n "${python_PYTHONFRAMEWORKPREFIX}"; then
@@ -7233,6 +7233,12 @@ $as_echo "$rubyhdrdir" >&6; }
         rubyarchdir=`$vi_cv_path_ruby -r rbconfig -e "print ($ruby_rbconfig::CONFIG.has_key? 'rubyarchhdrdir') ? $ruby_rbconfig::CONFIG['rubyarchhdrdir'] : '$rubyhdrdir/'+$ruby_rbconfig::CONFIG['arch']"`
         if test -d "$rubyarchdir"; then
           RUBY_CFLAGS="$RUBY_CFLAGS -I$rubyarchdir"
+        else
+	  dnl rbconfig says darwin15 but 10.12 SDK has darwin16
+          rubyarchdir=${rubyarchdir/darwin15/darwin16}
+          if test -d "$rubyarchdir"; then
+            RUBY_CFLAGS="$RUBY_CFLAGS -I$rubyarchdir"
+          fi
         fi
         rubyversion=`$vi_cv_path_ruby -r rbconfig -e "print $ruby_rbconfig::CONFIG['ruby_version'].gsub(/\./, '')[0,2]"`
 	if test "X$rubyversion" = "X"; then
@@ -7251,7 +7257,7 @@ $as_echo "$rubyhdrdir" >&6; }
 	  RUBY_LIBS="$RUBY_LIBS -L$rubylibdir"
         elif test -d "/System/Library/Frameworks/Ruby.framework"; then
                         RUBY_LIBS="-framework Ruby"
-                        RUBY_CFLAGS="-DRUBY_VERSION=$rubyversion"
+                        RUBY_CFLAGS="$RUBY_CFLAGS -DRUBY_VERSION=$rubyversion"
             librubyarg=
 	fi
 
@@ -7502,7 +7508,7 @@ $as_echo_n "checking whether compiling with process communication is possible...
 	/* Check bitfields */
 	struct nbbuf {
 	unsigned int  initDone:1;
-	ushort signmaplen;
+	unsigned short signmaplen;
 	};
 
 int
@@ -12118,11 +12124,11 @@ if test "x$vim_cv_getcwd_broken" = "xyes" ; then
 
 fi
 
-for ac_func in bcmp fchdir fchown fsync getcwd getpseudotty \
-	getpwent getpwnam getpwuid getrlimit gettimeofday getwd lstat memcmp \
+for ac_func in fchdir fchown fsync getcwd getpseudotty \
+	getpwent getpwnam getpwuid getrlimit gettimeofday getwd lstat \
 	memset mkdtemp nanosleep opendir putenv qsort readlink select setenv \
 	setpgid setsid sigaltstack sigstack sigset sigsetjmp sigaction \
-	sigvec strcasecmp strerror strftime stricmp strncasecmp \
+	sigprocmask sigvec strcasecmp strerror strftime stricmp strncasecmp \
 	strnicmp strpbrk strtol tgetent towlower towupper iswupper \
 	usleep utime utimes
 do :
@@ -14185,6 +14191,11 @@ else
 $as_echo "using default" >&6; }
 fi
 
+
+    vim_short_version_string=`grep 'define.*VIM_VERSION_SHORT' $srcdir/version.h|sed -E -e 's/.*"([0-9.]*)".*/\1/'`
+  snapshot=`grep -C2 "Add new patch number below this line" $srcdir/version.c|tail -1|sed -E -e 's/^ *([0-9]+),.*/\1/'`
+  vim_short_version_string="$vim_short_version_string.$snapshot"
+  XCODEFLAGS="$XCODEFLAGS VIM_SHORT_VERSION_STRING=$vim_short_version_string"
 
 
 fi

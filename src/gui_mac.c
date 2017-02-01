@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved		by Bram Moolenaar
  *				GUI/Motif support by Robert Webb
@@ -4830,7 +4830,7 @@ gui_mch_add_menu_item(vimmenu_T *menu, int idx)
 	char_u	    *p_actext;
 
 	p_actext = menu->actext;
-	key = find_special_key(&p_actext, &modifiers, FALSE, FALSE);
+	key = find_special_key(&p_actext, &modifiers, FALSE, FALSE, FALSE);
 	if (*p_actext != 0)
 	    key = 0; /* error: trailing text */
 	/* find_special_key() returns a keycode with as many of the
@@ -5181,10 +5181,10 @@ gui_mch_start_blink(void)
 /*
  * Return the RGB value of a pixel as long.
  */
-    long_u
+    guicolor_T
 gui_mch_get_rgb(guicolor_T pixel)
 {
-    return (Red(pixel) << 16) + (Green(pixel) << 8) + Blue(pixel);
+    return (guicolor_T)((Red(pixel) << 16) + (Green(pixel) << 8) + Blue(pixel));
 }
 
 

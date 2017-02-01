@@ -1507,9 +1507,9 @@ gui_mch_dialog(
     // Ensure no data is on the output queue before presenting the dialog.
     gui_macvim_force_flush();
 
-    int style = NSInformationalAlertStyle;
-    if (VIM_WARNING == type) style = NSWarningAlertStyle;
-    else if (VIM_ERROR == type) style = NSCriticalAlertStyle;
+    int style = NSAlertStyleInformational;
+    if (VIM_WARNING == type) style = NSAlertStyleWarning;
+    else if (VIM_ERROR == type) style = NSAlertStyleCritical;
 
     NSMutableDictionary *attr = [NSMutableDictionary
                         dictionaryWithObject:[NSNumber numberWithInt:style]
@@ -1597,7 +1597,7 @@ gui_mch_get_color(char_u *name)
 /*
  * Return the RGB value of a pixel as long.
  */
-    long_u
+    guicolor_T
 gui_mch_get_rgb(guicolor_T pixel)
 {
     // This is only implemented so that vim can guess the correct value for
@@ -1817,6 +1817,11 @@ gui_macvim_set_antialias(int antialias)
 gui_macvim_set_ligatures(int ligatures)
 {
     [[MMBackend sharedInstance] setLigatures:ligatures];
+}
+    void
+gui_macvim_set_thinstrokes(int thinStrokes)
+{
+    [[MMBackend sharedInstance] setThinStrokes:thinStrokes];
 }
 
     void
@@ -2242,13 +2247,13 @@ static int vimModMaskToEventModifierFlags(int mods)
     int flags = 0;
 
     if (mods & MOD_MASK_SHIFT)
-        flags |= NSShiftKeyMask;
+        flags |= NSEventModifierFlagShift;
     if (mods & MOD_MASK_CTRL)
-        flags |= NSControlKeyMask;
+        flags |= NSEventModifierFlagControl;
     if (mods & MOD_MASK_ALT)
-        flags |= NSAlternateKeyMask;
+        flags |= NSEventModifierFlagOption;
     if (mods & MOD_MASK_CMD)
-        flags |= NSCommandKeyMask;
+        flags |= NSEventModifierFlagCommand;
 
     return flags;
 }
@@ -2258,7 +2263,7 @@ static int vimModMaskToEventModifierFlags(int mods)
 // -- Channel Support ------------------------------------------------------
 
     void *
-gui_macvim_add_channel(channel_T *channel, int part)
+gui_macvim_add_channel(channel_T *channel, ch_part_T part)
 {
     dispatch_source_t s =
         dispatch_source_create(DISPATCH_SOURCE_TYPE_READ,

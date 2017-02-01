@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -343,7 +343,7 @@ EXTERN unsigned	bo_flags;
 static char *(p_bo_values[]) = {"all", "backspace", "cursor", "complete",
 				 "copy", "ctrlg", "error", "esc", "ex",
 				 "hangul", "insertmode", "lang", "mess",
-				 "showmatch", "operator", "register", "shell", 
+				 "showmatch", "operator", "register", "shell",
 				 "spell", "wildmode", NULL};
 # endif
 
@@ -616,6 +616,7 @@ EXTERN char_u	*p_km;		/* 'keymodel' */
 #ifdef FEAT_LANGMAP
 EXTERN char_u	*p_langmap;	/* 'langmap'*/
 EXTERN int	p_lnr;		/* 'langnoremap' */
+EXTERN int	p_lrm;		/* 'langremap' */
 #endif
 #if defined(FEAT_MENU) && defined(FEAT_MULTI_LANG)
 EXTERN char_u	*p_lm;		/* 'langmenu' */
@@ -642,11 +643,15 @@ EXTERN int	p_macatsui;	/* 'macatsui' */
 #endif
 #ifdef FEAT_GUI_MACVIM
 EXTERN int	p_macligatures;	/* 'macligatures' */
+EXTERN int	p_macthinstrokes;	/* 'macthinstrokes' */
 #endif
 EXTERN int	p_magic;	/* 'magic' */
 #ifdef FEAT_QUICKFIX
 EXTERN char_u	*p_mef;		/* 'makeef' */
 EXTERN char_u	*p_mp;		/* 'makeprg' */
+#endif
+#ifdef FEAT_SIGNS
+EXTERN char_u  *p_scl;		/* signcolumn */
 #endif
 #ifdef FEAT_SYN_HL
 EXTERN char_u   *p_cc;		/* 'colorcolumn' */
@@ -701,9 +706,14 @@ EXTERN char_u	*p_perldll;	/* 'perldll' */
 #endif
 #if defined(DYNAMIC_PYTHON3)
 EXTERN char_u	*p_py3dll;	/* 'pythonthreedll' */
+EXTERN char_u	*p_py3home;	/* 'pythonthreehome' */
 #endif
 #if defined(DYNAMIC_PYTHON)
 EXTERN char_u	*p_pydll;	/* 'pythondll' */
+EXTERN char_u	*p_pyhome;	/* 'pythonhome' */
+#endif
+#if defined(FEAT_PYTHON) || defined(FEAT_PYTHON3)
+EXTERN long	p_pyx;		/* 'pyxversion' */
 #endif
 #ifdef FEAT_RELTIME
 EXTERN long	p_rdt;		/* 'redrawtime' */
@@ -834,11 +844,13 @@ EXTERN int	p_tbs;		/* 'tagbsearch' */
 EXTERN char_u	*p_tc;		/* 'tagcase' */
 EXTERN unsigned tc_flags;       /* flags from 'tagcase' */
 #ifdef IN_OPTION_C
-static char *(p_tc_values[]) = {"followic", "ignore", "match", NULL};
+static char *(p_tc_values[]) = {"followic", "ignore", "match", "followscs", "smart", NULL};
 #endif
 #define TC_FOLLOWIC		0x01
 #define TC_IGNORE		0x02
 #define TC_MATCH		0x04
+#define TC_FOLLOWSCS		0x08
+#define TC_SMART		0x10
 EXTERN long	p_tl;		/* 'taglength' */
 EXTERN int	p_tr;		/* 'tagrelative' */
 EXTERN char_u	*p_tags;	/* 'tags' */
@@ -1042,6 +1054,7 @@ enum
     , BV_EP
     , BV_ET
     , BV_FENC
+    , BV_FP
 #ifdef FEAT_EVAL
     , BV_BEXPR
     , BV_FEX
@@ -1195,6 +1208,9 @@ enum
     , WV_WFW
 #endif
     , WV_WRAP
+#ifdef FEAT_SIGNS
+    , WV_SCL
+#endif
     , WV_COUNT	    /* must be the last one */
 };
 

@@ -81,15 +81,6 @@
 #define FUOPT_BGCOLOR_HLGROUP 0x004
 
 
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10
-# define TABBAR_STYLE_UNIFIED  @"Yosemite"
-# define TABBAR_STYLE_METAL    @"Yosemite"
-#else
-# define TABBAR_STYLE_UNIFIED  @"Unified"
-# define TABBAR_STYLE_METAL    @"Metal"
-#endif
-
-
 @interface MMWindowController (Private)
 - (NSSize)contentSize;
 - (void)adjustWindowFrame;
@@ -112,6 +103,8 @@
 - (void)applicationDidChangeScreenParameters:(NSNotification *)notification;
 - (void)enterNativeFullScreen;
 - (void)processAfterWindowPresentedQueue;
++ (NSString *)tabBarStyleForUnified;
++ (NSString *)tabBarStyleForMetal;
 @end
 
 
@@ -140,16 +133,16 @@
 
 - (id)initWithVimController:(MMVimController *)controller
 {
-    unsigned styleMask = NSTitledWindowMask | NSClosableWindowMask
-    | NSMiniaturizableWindowMask | NSResizableWindowMask
-    | NSUnifiedTitleAndToolbarWindowMask
-    | NSTexturedBackgroundWindowMask;
-    
+    unsigned styleMask = NSWindowStyleMaskTitled | NSWindowStyleMaskClosable
+            | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskResizable
+            | NSWindowStyleMaskUnifiedTitleAndToolbar
+            | NSWindowStyleMaskTexturedBackground;
+
     NSUserDefaults *ud = [NSUserDefaults standardUserDefaults];
     if ([[NSUserDefaults standardUserDefaults]
          boolForKey:MMNoTitleBarWindowKey]) {
         // No title bar setting
-        styleMask &= ~NSTitledWindowMask;
+        styleMask &= ~NSWindowStyleMaskTitled;
     }
     
     // NOTE: The content rect is only used the very first time MacVim is
@@ -252,7 +245,7 @@
     [win setDelegate:self];
     [win setInitialFirstResponder:[vimView textView]];
     
-    if ([win styleMask] & NSTexturedBackgroundWindowMask) {
+    if ([win styleMask] & NSWindowStyleMaskTexturedBackground) {
         // On Leopard, we want to have a textured window to have nice
         // looking tabs. But the textured window look implies rounded
         // corners, which looks really weird -- disable them. This is a
@@ -1271,25 +1264,7 @@
 
 - (void)windowDidBecomeMain:(NSNotification *)notification
 {
-    if (fullScreenWindow) {
-        // Hide menu and dock, both appear on demand.
-        //
-        // Another way to deal with several full-screen windows would be to
-        // hide/reveal the dock only when the first full-screen window is
-        // created and show it again after the last one has been closed, but
-        // toggling on each focus gain/loss works better with Spaces. The
-        // downside is that the menu bar flashes shortly when switching between
-        // two full-screen windows.
-        
-        // XXX: If you have a full-screen window on a secondary monitor and
-        // unplug the monitor, this will probably not work right.
-        
-        if ([fullScreenWindow isOnPrimaryScreen])
-            SetSystemUIMode(kUIModeAllSuppressed, 0); //requires 10.3
-    }
-    
     [[MMAppController sharedInstance] setMainMenu:[vimController mainMenu]];
-    [vimController sendMessage:GotFocusMsgID data:nil];
     
     if ([vimView textView]) {
         NSFontManager *fm = [NSFontManager sharedFontManager];
@@ -1297,14 +1272,13 @@
     }
 }
 
-- (void)windowDidResignMain:(NSNotification *)notification
+- (void)windowDidBecomeKey:(NSNotificationCenter *)notification
 {
-    if (fullScreenWindow) {
-        // Order menu and dock back in
-        if ([fullScreenWindow isOnPrimaryScreen])
-            SetSystemUIMode(kUIModeNormal, 0);
-    }
-    
+    [vimController sendMessage:GotFocusMsgID data:nil];
+}
+
+- (void)windowDidResignKey:(NSNotification *)notification
+{
     [vimController sendMessage:LostFocusMsgID data:nil];
 }
 
@@ -1321,45 +1295,31 @@
     if (!setupDone)
         return;
     
-    if (fullScreenWindow) {
-        // Window may move as a result of being dragged between Spaces.
-        ASLogDebug(@"Full-screen window moved, "
-                   "ensuring it covers the screen...");
-        
-        // The full-screen window may have moved to/off the screen with the
-        // menu bar, so we hide/show the menu bar as a precaution.
-        if ([fullScreenWindow isOnPrimaryScreen])
-            SetSystemUIMode(kUIModeAllSuppressed, 0);
-        else
-            SetSystemUIMode(kUIModeNormal, 0);
-        
-        [fullScreenWindow setFrame:[[fullScreenWindow screen] frame]
-                           display:NO];
-    } else if (fullScreenEnabled) {
+    if (fullScreenEnabled) {
         // NOTE: The full-screen is not supposed to be able to be moved.  If we
         // do get here while in full-screen something unexpected happened (e.g.
         // the full-screen window was on an external display that got
         // unplugged).
         return;
-    } else {
-        NSRect frame = [decoratedWindow frame];
-        NSPoint topLeft = { frame.origin.x, NSMaxY(frame) };
-        if (windowAutosaveKey) {
-            NSString *topLeftString = NSStringFromPoint(topLeft);
-            
-            [[NSUserDefaults standardUserDefaults]
-             setObject:topLeftString forKey:windowAutosaveKey];
-        }
-        
-        // NOTE: This method is called when the user drags the window, but not
-        // when the top left point changes programmatically.
-        // NOTE 2: Vim counts Y-coordinates from the top of the screen.
-        int pos[2] = {
-            (int)topLeft.x,
-            (int)(NSMaxY([[decoratedWindow screen] frame]) - topLeft.y) };
-        NSData *data = [NSData dataWithBytes:pos length:2*sizeof(int)];
-        [vimController sendMessage:SetWindowPositionMsgID data:data];
     }
+    
+    NSRect frame = [decoratedWindow frame];
+    NSPoint topLeft = { frame.origin.x, NSMaxY(frame) };
+    if (windowAutosaveKey) {
+        NSString *topLeftString = NSStringFromPoint(topLeft);
+        
+        [[NSUserDefaults standardUserDefaults]
+         setObject:topLeftString forKey:windowAutosaveKey];
+    }
+    
+    // NOTE: This method is called when the user drags the window, but not
+    // when the top left point changes programmatically.
+    // NOTE 2: Vim counts Y-coordinates from the top of the screen.
+    int pos[2] = {
+        (int)topLeft.x,
+        (int)(NSMaxY([[decoratedWindow screen] frame]) - topLeft.y) };
+    NSData *data = [NSData dataWithBytes:pos length:2*sizeof(int)];
+    [vimController sendMessage:SetWindowPositionMsgID data:data];
 }
 
 - (NSRect)windowWillUseStandardFrame:(NSWindow *)window
@@ -1383,30 +1343,30 @@
     return newFrame;
 }
 
-/*
- - (void)windowDidResize:(id)sender
- {
- if (resizingDueToMove) {
- resizingDueToMove = NO;
- return;
- }
- 
- if (!setupDone)
- return;
- 
- // NOTE: We need to update the window frame size for Split View even though
- // in full-screen on El Capitan or later.
- if (floor(NSAppKitVersionNumber) <= NSAppKitVersionNumber10_10_Max
- && fullScreenEnabled)
- return;
- 
- // NOTE: Since we have no control over when the window may resize (Cocoa
- // may resize automatically) we simply set the view to fill the entire
- // window.  The vim view takes care of notifying Vim if the number of
- // (rows,columns) changed.
- [vimView setFrameSize:[self contentSize]];
- }
- */
+
+- (void)windowDidResize:(id)sender
+{
+    if (resizingDueToMove) {
+        resizingDueToMove = NO;
+        return;
+    }
+
+    if (!setupDone)
+        return;
+
+    // NOTE: We need to update the window frame size for Split View even though
+    // in full-screen on El Capitan or later.
+    if (floor(NSAppKitVersionNumber) <= NSAppKitVersionNumber10_10_Max
+        && fullScreenEnabled)
+        return;
+
+    // NOTE: Since we have no control over when the window may resize (Cocoa
+    // may resize automatically) we simply set the view to fill the entire
+    // window.  The vim view takes care of notifying Vim if the number of
+    // (rows,columns) changed.
+    [vimView setFrameSize:[self contentSize]];
+}
+
 
 - (void)windowDidChangeBackingProperties:(NSNotification *)notification
 {
@@ -1429,8 +1389,8 @@
     
     // Decide whether too zoom horizontally or not (always zoom vertically).
     NSEvent *event = [NSApp currentEvent];
-    BOOL cmdLeftClick = [event type] == NSLeftMouseUp &&
-    [event modifierFlags] & NSCommandKeyMask;
+    BOOL cmdLeftClick = [event type] == NSEventTypeLeftMouseUp &&
+                        [event modifierFlags] & NSEventModifierFlagCommand;
     BOOL zoomBoth = [[NSUserDefaults standardUserDefaults]
                      boolForKey:MMZoomBothKey];
     zoomBoth = (zoomBoth && !cmdLeftClick) || (!zoomBoth && cmdLeftClick);
@@ -1793,8 +1753,9 @@ startCustomAnimationToEnterFullScreenWithDuration:(NSTimeInterval)duration
         [context setDuration:0.5*duration];
         [[window animator] setAlphaValue:0];
     } completionHandler:^{
-        [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
-        [tabBarControl setStyleNamed:TABBAR_STYLE_UNIFIED];
+        [window setStyleMask:([window styleMask] | NSWindowStyleMaskFullScreen)];
+        NSString *tabBarStyle = [[self class] tabBarStyleForUnified];
+        [tabBarControl setStyleNamed:tabBarStyle];
         [self updateTablineSeparator];
         
         // Stay dark for some time to wait for things to sync, then do the full screen operation
@@ -1859,8 +1820,9 @@ startCustomAnimationToEnterFullScreenWithDuration:(NSTimeInterval)duration
     
     fullScreenEnabled = NO;
     [window setAlphaValue:1];
-    [window setStyleMask:([window styleMask] & ~NSFullScreenWindowMask)];
-    [tabBarControl setStyleNamed:TABBAR_STYLE_METAL];
+    [window setStyleMask:([window styleMask] & ~NSWindowStyleMaskFullScreen)];
+    NSString *tabBarStyle = [[self class] tabBarStyleForMetal];
+    [tabBarControl setStyleNamed:tabBarStyle];
     [self updateTablineSeparator];
     [window setFrame:preFullScreenFrame display:YES];
 }
@@ -1889,8 +1851,9 @@ startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration
         [context setDuration:0.5*duration];
         [[window animator] setAlphaValue:0];
     } completionHandler:^{
-        [window setStyleMask:([window styleMask] & ~NSFullScreenWindowMask)];
-        [tabBarControl setStyleNamed:TABBAR_STYLE_METAL];
+        [window setStyleMask:([window styleMask] & ~NSWindowStyleMaskFullScreen)];
+        NSString *tabBarStyle = [[self class] tabBarStyleForMetal];
+        [tabBarControl setStyleNamed:tabBarStyle];
         [self updateTablineSeparator];
         [window setFrame:preFullScreenFrame display:YES];
         
@@ -1938,8 +1901,9 @@ startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration
     
     fullScreenEnabled = YES;
     [window setAlphaValue:1];
-    [window setStyleMask:([window styleMask] | NSFullScreenWindowMask)];
-    [tabBarControl setStyleNamed:TABBAR_STYLE_UNIFIED];
+    [window setStyleMask:([window styleMask] | NSWindowStyleMaskFullScreen)];
+    NSString *tabBarStyle = [[self class] tabBarStyleForUnified];
+    [tabBarControl setStyleNamed:tabBarStyle];
     [self updateTablineSeparator];
     [self maximizeWindow:fullScreenOptions];
 }
@@ -2198,7 +2162,7 @@ startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration
     } else {
         BOOL toolbarVisible = [decoratedWindow toolbar] != nil;
         BOOL windowTextured = ([decoratedWindow styleMask] &
-                               NSTexturedBackgroundWindowMask) != 0;
+                               NSWindowStyleMaskTexturedBackground) != 0;
         return toolbarVisible || windowTextured;
     }
     return NO;
@@ -2598,5 +2562,16 @@ startCustomAnimationToExitFullScreenWithDuration:(NSTimeInterval)duration
 
     [afterWindowPresentedQueue release]; afterWindowPresentedQueue = nil;
 }
+
++ (NSString *)tabBarStyleForUnified
+{
+    return shouldUseYosemiteTabBarStyle() ? @"Yosemite" : @"Unified";
+}
+
++ (NSString *)tabBarStyleForMetal
+{
+    return shouldUseYosemiteTabBarStyle() ? @"Yosemite" : @"Metal";
+}
+
 @end // MMWindowController (Private)
 

@@ -63,7 +63,7 @@ enum {
     // (another way would be to make the existing window large enough that the
     // title bar is off screen. but that doesn't work with multiple screens).
     self = [super initWithContentRect:[screen frame]
-                            styleMask:NSBorderlessWindowMask
+                            styleMask:NSWindowStyleMaskBorderless
                               backing:NSBackingStoreBuffered
                                 defer:YES
                                // since we're passing [screen frame] above,
@@ -144,12 +144,9 @@ enum {
 
     //oldTabBarStyle = [[view tabBarControl] styleName];
 
-    /*NSString *style;
-#if MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_10
-    style = @"Yosemite";
-#else
-    style = @"Unified";
-#endif
+    /*
+    NSString *style =
+        shouldUseYosemiteTabBarStyle() ? @"Yosemite" : @"Unified";
     [[view tabBarControl] setStyleNamed:style];
     */
     
@@ -157,6 +154,8 @@ enum {
     oldPosition = [view frame].origin;
 
     [view removeFromSuperviewWithoutNeedingDisplay];
+    if (floor(NSAppKitVersionNumber) >= NSAppKitVersionNumber10_12)
+        [[view textView] setCGLayerEnabled:YES];
     [[self contentView] addSubview:view];
     [self setInitialFirstResponder:[view textView]];
     
@@ -268,6 +267,9 @@ enum {
 
     [view setFrameOrigin:oldPosition];
     [self close];
+
+    if (floor(NSAppKitVersionNumber) >= NSAppKitVersionNumber10_12)
+        [[view textView] setCGLayerEnabled:NO];
 
     // Set the text view to initial first responder, otherwise the 'plus'
     // button on the tabline steals the first responder status.

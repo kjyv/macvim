@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved    by Bram Moolenaar
  *
@@ -860,12 +860,26 @@ Python3_Init(void)
 
 	init_structs();
 
-
-#ifdef PYTHON3_HOME
-# ifdef DYNAMIC_PYTHON3
-	if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
-# endif
+#ifdef DYNAMIC_PYTHON3
+	if (*p_py3home != '\0')
+	{
+	    int len;
+	    wchar_t *buf;
+	    len = mbstowcs(NULL, (char *)p_py3home, 0) + 1;
+	    buf = (wchar_t *)alloc(len * sizeof(wchar_t));
+	    if (buf && mbstowcs(buf, (char *)p_py3home, len) != (size_t)-1) {
+		Py_SetPythonHome(buf);
+		/* We must keep buf for Py_SetPythonHome */
+	    }
+	}
+# ifdef PYTHON3_HOME
+	else if (mch_getenv((char_u *)"PYTHONHOME") == NULL)
 	    Py_SetPythonHome(PYTHON3_HOME);
+# endif
+#else
+# ifdef PYTHON3_HOME
+	Py_SetPythonHome(PYTHON3_HOME);
+# endif
 #endif
 
 	PyImport_AppendInittab("vim", Py3Init_vim);
@@ -1004,6 +1018,9 @@ ex_py3(exarg_T *eap)
 {
     char_u *script;
 
+    if (p_pyx == 0)
+	p_pyx = 3;
+
     script = script_get(eap, eap->arg);
     if (!eap->skip)
     {
@@ -1027,6 +1044,9 @@ ex_py3file(exarg_T *eap)
     const char *file;
     char *p;
     int i;
+
+    if (p_pyx == 0)
+	p_pyx = 3;
 
     /* Have to do it like this. PyRun_SimpleFile requires you to pass a
      * stdio file pointer, but Vim and the Python DLL are compiled with
@@ -1080,6 +1100,9 @@ ex_py3file(exarg_T *eap)
     void
 ex_py3do(exarg_T *eap)
 {
+    if (p_pyx == 0)
+	p_pyx = 3;
+
     DoPyCommand((char *)eap->arg,
 	    (rangeinitializer)init_range_cmd,
 	    (runner)run_do,

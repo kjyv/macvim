@@ -45,6 +45,7 @@ SRC_ALL =	\
 		src/hashtab.c \
 		src/json.c \
 		src/json_test.c \
+		src/kword_test.c \
 		src/list.c \
 		src/keymap.h \
 		src/macros.h \
@@ -93,6 +94,7 @@ SRC_ALL =	\
 		src/vim.h \
 		src/winclip.c \
 		src/window.c \
+		src/tee/tee.c \
 		src/xxd/xxd.c \
 		src/main.aap \
 		src/testdir/main.aap \
@@ -121,6 +123,7 @@ SRC_ALL =	\
 		src/testdir/pythonx/topmodule/submodule/subsubmodule/subsubsubmodule.py \
 		src/testdir/python_after/*.py \
 		src/testdir/python_before/*.py \
+		src/testdir/pyxfile/*.py \
 		src/testdir/bench*.in \
 		src/testdir/bench*.vim \
 		src/testdir/samples/*.txt \
@@ -206,7 +209,7 @@ SRC_UNIX =	\
 		src/config.mk.dist \
 		src/config.mk.in \
 		src/configure \
-		src/configure.in \
+		src/configure.ac \
 		src/gui_at_fs.c \
 		src/gui_at_sb.c \
 		src/gui_at_sb.h \
@@ -263,6 +266,7 @@ SRC_UNIX =	\
 		src/workshop.h \
 		src/wsdebug.c \
 		src/wsdebug.h \
+		src/tee/Makefile \
 		src/xxd/Makefile \
 
 # source files for both DOS and Unix
@@ -314,6 +318,7 @@ SRC_DOS =	\
 		src/Make_dvc.mak \
 		src/Make_ming.mak \
 		src/Make_mvc.mak \
+		tools/rename.bat \
 		src/bigvim.bat \
 		src/bigvim64.bat \
 		src/msvcsetup.bat \
@@ -357,6 +362,7 @@ SRC_DOS =	\
 		src/vimrun.c \
 		src/xpm_w32.c \
 		src/xpm_w32.h \
+		src/tee/Make_mvc.mak \
 		src/xxd/Make_bc5.mak \
 		src/xxd/Make_ming.mak \
 		src/xxd/Make_mvc.mak \

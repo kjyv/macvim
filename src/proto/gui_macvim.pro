@@ -121,7 +121,7 @@ gui_mch_enable_scrollbar(
 gui_mch_flash(int msec);
     guicolor_T
 gui_mch_get_color(char_u *name);
-    long_u
+    guicolor_T
 gui_mch_get_rgb(guicolor_T pixel);
     void
 gui_mch_get_screen_dimensions(int *screen_w, int *screen_h);
@@ -212,6 +212,7 @@ void gui_macvim_update_modified_flag();
 void gui_macvim_add_to_find_pboard(char_u *pat);
 void gui_macvim_set_antialias(int antialias);
 void gui_macvim_set_ligatures(int ligatures);
+void gui_macvim_set_thinstrokes(int thinStrokes);
 void gui_macvim_set_blur(int blur);
 
 int16_t odb_buffer_close(buf_T *buf);
@@ -232,7 +233,7 @@ gui_mch_replace_dialog(exarg_T *eap);
 im_set_control(int enable);
 
     void *
-gui_macvim_add_channel(channel_T *channel, int part);
+gui_macvim_add_channel(channel_T *channel, ch_part_T part);
     void
 gui_macvim_remove_channel(void *cookie);
 

@@ -48,6 +48,10 @@
 #define kCTFontOrientationDefault kCTFontDefaultOrientation
 #endif // MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_8
 
+extern void CGContextSetFontSmoothingStyle(CGContextRef, int);
+extern int CGContextGetFontSmoothingStyle(CGContextRef);
+#define fontSmoothingStyleLight (2 << 3)
+
 #if MAC_OS_X_VERSION_MIN_REQUIRED < MAC_OS_X_VERSION_10_7
     static void
 CTFontDrawGlyphs(CTFontRef fontRef, const CGGlyph glyphs[],
@@ -127,6 +131,10 @@ defaultAdvanceForFont(NSFont *font)
 {
     if (!(self = [super initWithFrame:frame]))
         return nil;
+
+    cgLayerEnabled = [[NSUserDefaults standardUserDefaults]
+            boolForKey:MMUseCGLayerAlwaysKey];
+    cgLayerLock = [NSLock new];
 
     // NOTE!  It does not matter which font is set here, Vim will set its
     // own font on startup anyway.  Just set some bogus values.
@@ -396,6 +404,11 @@ defaultAdvanceForFont(NSFont *font)
     ligatures = state;
 }
 
+- (void)setThinStrokes:(BOOL)state
+{
+    thinStrokes = state;
+}
+
 - (void)setImControl:(BOOL)enable
 {
     [helper setImControl:enable];
@@ -572,6 +585,7 @@ defaultAdvanceForFont(NSFont *font)
     return NO;
 }
 
+/*
 - (void)setFrame:(NSRect)rect
 {
     [super setFrame:rect];
@@ -603,66 +617,127 @@ defaultAdvanceForFont(NSFont *font)
     // This is an NSView method which we override to enable content
     // preservation in order to avoid flickering during a view resize.
     return YES;
-}
+}*/
 
 - (void)drawRect:(NSRect)rect
 {
- 
     NSGraphicsContext *context = [NSGraphicsContext currentContext];
     [context setShouldAntialias:antialias];
-    
-    if ([self inLiveResize]) {
-        // Clear areas exposed during live resize.  Note that "live resize"
-        // happens when a user drags something to resize the view.  This
-        // "something" can for example be the window or a split view.  However,
-        // Cocoa only seems to set the exposed rects properly if it is the
-        // window that is being resized!  We detect this by checking for an
-        // empty preserved rect above.  To cope with this situation we clear
-        // exposed areas "manually below as well.
-        NSInteger count, i;
-        NSRect rects[4];
-        [self getRectsExposedDuringLiveResize:rects count:&count];
-        [defaultBackgroundColor set];
-        for (i = 0; i < count; ++i) {
-            NSRectFill(rects[i]);
-        }
-    }
-    
-    //When not in live resize, we're finished and can draw a full image
-    if ([drawData count] > 0) {
-        id data;
-        NSEnumerator *e = [drawData objectEnumerator];
-        while ((data = [e nextObject]))
-            [self batchDrawData:data];
 
-        if(![self inLiveResize]){
-            [drawData removeAllObjects];
+    if (cgLayerEnabled && drawData.count == 0) {
+        // during a live resize, we will have around a stale layer until the
+        // refresh messages travel back from the vim process. We push the old
+        // layer in at an offset to get rid of jitter due to lines changing
+        // position.
+        [cgLayerLock lock];
+        CGLayerRef l = [self getCGLayer];
+        CGSize cgLayerSize = CGLayerGetSize(l);
+        CGSize frameSize = [self frame].size;
+        NSRect drawRect = NSMakeRect(
+                0,
+                frameSize.height - cgLayerSize.height,
+                cgLayerSize.width,
+                cgLayerSize.height);
+
+        CGContextRef cgContext = [context graphicsPort];
+
+        const NSRect *rects;
+        long count;
+        [self getRectsBeingDrawn:&rects count:&count];
+
+        int i;
+        for (i = 0; i < count; i++) {
+           CGContextSaveGState(cgContext);
+           CGContextClipToRect(cgContext, rects[i]);
+           CGContextSetBlendMode(cgContext, kCGBlendModeCopy);
+           CGContextDrawLayerInRect(cgContext, drawRect, l);
+           CGContextRestoreGState(cgContext);
         }
-        return;
+        [cgLayerLock unlock];
+    } else {
+       id data;
+       NSEnumerator *e = [drawData objectEnumerator];
+       while ((data = [e nextObject]))
+          [self batchDrawData:data];
+
+       [drawData removeAllObjects];
     }
 }
+
+/*
+- (void)batchDrawNow
+{
+}
+*/
 
 - (void)performBatchDrawWithData:(NSData *)data
 {
-    [drawData addObject:data];
-    [self setNeedsDisplay:YES];
-    
-    // NOTE: During resizing, Cocoa only sends draw messages before Vim's rows
-    // and columns are changed (due to ipc delays). Force a redraw here.
-    if ([self inLiveResize])
-        [self display];
+    if (cgLayerEnabled && drawData.count == 0 && [self getCGContext]) {
+        [cgLayerLock lock];
+        [self batchDrawData:data];
+        [cgLayerLock unlock];
+    } else {
+        [drawData addObject:data];
+        [self setNeedsDisplay:YES];
+
+        // NOTE: During resizing, Cocoa only sends draw messages before Vim's rows
+        // and columns are changed (due to ipc delays). Force a redraw here.
+        if ([self inLiveResize])
+           [self display];
+    }
 }
 
-- (void)batchDrawNow
+- (void)setCGLayerEnabled:(BOOL)enabled
 {
-    // HACK! Draw manually instead of setting the 'needs display' flag.  The
-    // reason for this is that marking the entire view as needing display (via
-    // setNeedsDisplay:) can cause problems for borderless windows (used for
-    // full-screen).  Specifically, borderless windows have a tendency to clear
-    // the entire rect that needs display (i.e. the entire view) whereas we
-    // usually only draw parts of the view, causing text to disappear.  By
-    // drawing immediately we circumvent this problem.
-    [self displayRectIgnoringOpacity:[self frame]];
+    cgLayerEnabled = enabled;
+
+    if (!cgLayerEnabled)
+        [self releaseCGLayer];
+}
+
+- (void)releaseCGLayer
+{
+    if (cgLayer)  {
+        CGLayerRelease(cgLayer);
+        cgLayer = nil;
+        cgLayerContext = nil;
+    }
+}
+
+- (CGLayerRef)getCGLayer
+{
+    NSParameterAssert(cgLayerEnabled);
+    if (!cgLayer && [self lockFocusIfCanDraw]) {
+        NSGraphicsContext *context = [NSGraphicsContext currentContext];
+        NSRect frame = [self frame];
+        cgLayer = CGLayerCreateWithContext(
+            [context graphicsPort], frame.size, NULL);
+        [self unlockFocus];
+    }
+    return cgLayer;
+}
+
+- (CGContextRef)getCGContext
+{
+    if (cgLayerEnabled) {
+        if (!cgLayerContext)
+            cgLayerContext = CGLayerGetContext([self getCGLayer]);
+        return cgLayerContext;
+    } else {
+        return [[NSGraphicsContext currentContext] graphicsPort];
+    }
+}
+
+- (void)setNeedsDisplayCGLayerInRect:(CGRect)rect
+{
+    if (cgLayerEnabled)
+       [self setNeedsDisplayInRect:rect];
+}
+
+- (void)setNeedsDisplayCGLayer:(BOOL)flag
+{
+    if (cgLayerEnabled)
+       [self setNeedsDisplay:flag];
 }
 
 - (NSSize)constrainRows:(int *)rows columns:(int *)cols toSize:(NSSize)size
@@ -912,7 +987,7 @@ defaultAdvanceForFont(NSFont *font)
     const void *end = bytes + [data length];
 
 #if MM_DEBUG_DRAWING
-    ASLogNotice(@"====> BEGIN %s", _cmd);
+    ASLogNotice(@"====> BEGIN");
 #endif
     // TODO: Sanity check input
 
@@ -968,10 +1043,19 @@ defaultAdvanceForFont(NSFont *font)
                                  column:col
                                 numRows:height
                              numColumns:width];
-            [signImg drawInRect:r
-                       fromRect:NSZeroRect
-                      operation:NSCompositeSourceOver
-                       fraction:1.0];
+            if (cgLayerEnabled) {
+                CGContextRef context = [self getCGContext];
+                CGImageRef cgImage = [signImg CGImageForProposedRect:&r
+                                                             context:nil
+                                                               hints:nil];
+                CGContextDrawImage(context, r, cgImage);
+            } else {
+                [signImg drawInRect:r
+                           fromRect:NSZeroRect
+                          operation:NSCompositingOperationSourceOver
+                           fraction:1.0];
+            }
+            [self setNeedsDisplayCGLayerInRect:r];
         } else if (DrawStringDrawType == type) {
             int bg = *((int*)bytes);  bytes += sizeof(int);
             int fg = *((int*)bytes);  bytes += sizeof(int);
@@ -1073,11 +1157,11 @@ defaultAdvanceForFont(NSFont *font)
     }
 
 #if MM_DEBUG_DRAWING
-    ASLogNotice(@"<==== END   %s", _cmd);
+    ASLogNotice(@"<==== END");
 #endif
 }
 
-   static CTFontRef
+    static CTFontRef
 lookupFont(NSMutableArray *fontCache, const unichar *chars, UniCharCount count,
            CTFontRef currFontRef)
 {
@@ -1354,7 +1438,7 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
          withFlags:(int)flags foregroundColor:(int)fg
    backgroundColor:(int)bg specialColor:(int)sp
 {
-    CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef context = [self getCGContext];
     NSRect frame = [self bounds];
     float x = col*cellSize.width + insetSize.width;
     float y = frame.size.height - insetSize.height - (1+row)*cellSize.height;
@@ -1367,6 +1451,13 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
     }
 
     CGContextSaveGState(context);
+
+    int originalFontSmoothingStyle = 0;
+    if (thinStrokes) {
+        CGContextSetShouldSmoothFonts(context, YES);
+        originalFontSmoothingStyle = CGContextGetFontSmoothingStyle(context);
+        CGContextSetFontSmoothingStyle(context, fontSmoothingStyleLight);
+    }
 
     // NOTE!  'cells' is zero if we're drawing a composing character
     CGFloat clipWidth = cells > 0 ? cells*cellSize.width : w;
@@ -1458,15 +1549,33 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
     recurseDraw(chars, glyphs, positions, length, context, fontRef, fontCache, ligatures);
 
     CFRelease(fontRef);
+    if (thinStrokes)
+        CGContextSetFontSmoothingStyle(context, originalFontSmoothingStyle);
     CGContextRestoreGState(context);
+
+    [self setNeedsDisplayCGLayerInRect:clipRect];
 }
 
 - (void)scrollRect:(NSRect)rect lineCount:(int)count
 {
-    NSPoint destPoint = rect.origin;
-    destPoint.y -= count * cellSize.height;
+    if (cgLayerEnabled) {
+        CGContextRef context = [self getCGContext];
+        int yOffset = count * cellSize.height;
+        NSRect clipRect = rect;
+        clipRect.origin.y -= yOffset;
 
-    NSCopyBits(0, rect, destPoint);
+        // draw self on top of self, offset so as to "scroll" lines vertically
+        CGContextSaveGState(context);
+        CGContextClipToRect(context, clipRect);
+        CGContextSetBlendMode(context, kCGBlendModeCopy);
+        CGContextDrawLayerAtPoint(
+                context, CGPointMake(0, -yOffset), [self getCGLayer]);
+        CGContextRestoreGState(context);
+        [self setNeedsDisplayCGLayerInRect:clipRect];
+    } else {
+        NSSize delta={0, -count * cellSize.height};
+        [self scrollRect:rect by:delta];
+    }
 }
 
 - (void)deleteLinesFromRow:(int)row lineCount:(int)count
@@ -1508,7 +1617,7 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
 - (void)clearBlockFromRow:(int)row1 column:(int)col1 toRow:(int)row2
                    column:(int)col2 color:(int)color
 {
-    CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef context = [self getCGContext];
     NSRect rect = [self rectFromRow:row1 column:col1 toRow:row2 column:col2];
 
     CGContextSetRGBFillColor(context, RED(color), GREEN(color), BLUE(color),
@@ -1517,11 +1626,13 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
     CGContextSetBlendMode(context, kCGBlendModeCopy);
     CGContextFillRect(context, *(CGRect*)&rect);
     CGContextSetBlendMode(context, kCGBlendModeNormal);
+    [self setNeedsDisplayCGLayerInRect:rect];
 }
 
 - (void)clearAll
 {
-    CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
+    [self releaseCGLayer];
+    CGContextRef context = [self getCGContext];
     NSRect rect = [self bounds];
     float r = [defaultBackgroundColor redComponent];
     float g = [defaultBackgroundColor greenComponent];
@@ -1532,12 +1643,14 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
     CGContextSetRGBFillColor(context, r, g, b, a);
     CGContextFillRect(context, *(CGRect*)&rect);
     CGContextSetBlendMode(context, kCGBlendModeNormal);
+
+    [self setNeedsDisplayCGLayer:YES];
 }
 
 - (void)drawInsertionPointAtRow:(int)row column:(int)col shape:(int)shape
                        fraction:(int)percent color:(int)color
 {
-    CGContextRef context = [[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef context = [self getCGContext];
     NSRect rect = [self rectForRow:row column:col numRows:1 numColumns:1];
 
     CGContextSaveGState(context);
@@ -1579,6 +1692,7 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
         CGContextFillRect(context, *(CGRect*)&rect);
     }
 
+    [self setNeedsDisplayCGLayerInRect:rect];
     CGContextRestoreGState(context);
 }
 
@@ -1586,7 +1700,7 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
                    numColumns:(int)ncols
 {
     // TODO: THIS CODE HAS NOT BEEN TESTED!
-    CGContextRef cgctx = [[NSGraphicsContext currentContext] graphicsPort];
+    CGContextRef cgctx = [self getCGContext];
     CGContextSaveGState(cgctx);
     CGContextSetBlendMode(cgctx, kCGBlendModeDifference);
     CGContextSetRGBFillColor(cgctx, 1.0, 1.0, 1.0, 1.0);
@@ -1595,6 +1709,7 @@ recurseDraw(const unichar *chars, CGGlyph *glyphs, CGPoint *positions,
                         numColumns:ncols];
     CGContextFillRect(cgctx, *(CGRect*)&rect);
 
+    [self setNeedsDisplayCGLayerInRect:rect];
     CGContextRestoreGState(cgctx);
 }
 

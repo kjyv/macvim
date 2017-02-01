@@ -129,6 +129,39 @@ func Test_undo_del_chars()
   close!
 endfunc
 
+func Test_undolist()
+  new
+  set ul=100
+
+  let a=execute('undolist')
+  call assert_equal("\nNothing to undo", a)
+
+  " 1 leaf (2 changes).
+  call feedkeys('achange1', 'xt')
+  call feedkeys('achange2', 'xt')
+  let a=execute('undolist')
+  call assert_match("^\nnumber changes  when  *saved\n *2  *2 .*$", a)
+
+  " 2 leaves.
+  call feedkeys('u', 'xt')
+  call feedkeys('achange3\<Esc>', 'xt')
+  let a=execute('undolist')
+  call assert_match("^\nnumber changes  when  *saved\n *2  *2  *.*\n *3  *2 .*$", a)
+  close!
+endfunc
+
+func Test_U_command()
+  new
+  set ul=100
+  call feedkeys("achange1\<Esc>", 'xt')
+  call feedkeys("achange2\<Esc>", 'xt')
+  norm! U
+  call assert_equal('', getline(1))
+  norm! U
+  call assert_equal('change1change2', getline(1))
+  close!
+endfunc
+
 func Test_undojoin()
   new
   call feedkeys("Goaaaa\<Esc>", 'xt')
@@ -143,7 +176,17 @@ func Test_undojoin()
   call assert_equal(['aaaa', 'bbbb', 'cccc'], getline(2, '$'))
   call feedkeys("u", 'xt')
   call assert_equal(['aaaa'], getline(2, '$'))
-  close!
+  bwipe!
+endfunc
+
+func Test_undojoin_redo()
+  new
+  call setline(1, ['first line', 'second line'])
+  call feedkeys("ixx\<Esc>", 'xt')
+  call feedkeys(":undojoin | redo\<CR>", 'xt')
+  call assert_equal('xxfirst line', getline(1))
+  call assert_equal('second line', getline(2))
+  bwipe!
 endfunc
 
 func Test_undo_write()
@@ -201,4 +244,32 @@ func Test_insert_expr()
   call assert_equal(['a', 'b', 'c', '12', 'd'], getline(2, '$'))
 
   close!
+endfunc
+
+func Test_undofile_earlier()
+  " Issue #1254
+  " create undofile with timestamps older than Vim startup time.
+  let t0 = localtime() - 43200
+  call test_settime(t0)
+  new Xfile
+  call feedkeys("ione\<Esc>", 'xt')
+  set ul=100
+  call test_settime(t0 + 1)
+  call feedkeys("otwo\<Esc>", 'xt')
+  set ul=100
+  call test_settime(t0 + 2)
+  call feedkeys("othree\<Esc>", 'xt')
+  set ul=100
+  w
+  wundo Xundofile
+  bwipe!
+  " restore normal timestamps.
+  call test_settime(0)
+  new Xfile
+  rundo Xundofile
+  earlier 1d
+  call assert_equal('', getline(1))
+  bwipe!
+  call delete('Xfile')
+  call delete('Xundofile')
 endfunc

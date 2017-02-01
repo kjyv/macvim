@@ -29,6 +29,7 @@
     float                       fontDescent;
     BOOL                        antialias;
     BOOL                        ligatures;
+    BOOL                        thinStrokes;
     NSMutableArray              *drawData;
 
     MMTextViewHelper            *helper;
@@ -38,8 +39,14 @@
     CGPoint                     *positions;
     NSMutableArray              *fontCache;
 
+
     NSPoint                     lastLowerLeft;
     NSPoint                     lastUpperRight;
+
+    BOOL                        cgLayerEnabled;
+    CGLayerRef                  cgLayer;
+    CGContextRef                cgLayerContext;
+    NSLock                      *cgLayerLock;
 
     // These are used in MMCoreTextView+ToolTip.m
     id trackingRectOwner_;              // (not retained)
@@ -80,12 +87,14 @@
 - (void)setMouseShape:(int)shape;
 - (void)setAntialias:(BOOL)state;
 - (void)setLigatures:(BOOL)state;
+- (void)setThinStrokes:(BOOL)state;
 - (void)setImControl:(BOOL)enable;
 - (void)activateIm:(BOOL)enable;
 - (void)checkImState;
 - (BOOL)convertPoint:(NSPoint)point toRow:(int *)row column:(int *)column;
 - (NSRect)rectForRow:(int)row column:(int)column numRows:(int)nr
           numColumns:(int)nc;
+- (void)setCGLayerEnabled:(BOOL)enabled;
 
 //
 // NSTextView methods

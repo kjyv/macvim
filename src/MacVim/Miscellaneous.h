@@ -56,6 +56,7 @@ extern NSString *MMSidebarVisibleKey;
 extern NSString *MMNativeFullScreenKey;
 extern NSString *MMUseMouseTimeKey;
 extern NSString *MMFullScreenFadeTimeKey;
+extern NSString *MMUseCGLayerAlwaysKey;
 
 
 // Enum for MMUntitledWindowKey
@@ -174,3 +175,6 @@ NSView *showHiddenFilesView();
 //     http://www.unicode.org/reports/tr15/
 NSString *normalizeFilename(NSString *filename);
 NSArray *normalizeFilenames(NSArray *filenames);
+
+
+BOOL shouldUseYosemiteTabBarStyle();

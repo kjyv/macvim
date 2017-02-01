@@ -81,6 +81,9 @@ if has("gui_macvim")
   an <silent> 9998.350 Window.Select\ Previous\ Tab :tabprevious<CR>
   an 9998.360 Window.-SEP2-			    <Nop>
   an <silent> 9998.370 Window.Bring\ All\ To\ Front <Nop>
+  an <silent> 9998.380 Window.Stay\ in\ Front <Nop>
+  an <silent> 9998.390 Window.Stay\ in\ Back <Nop>
+  an <silent> 9998.400 Window.Stay\ Level\ Normal <Nop>
 endif
 
 " Help menu
@@ -395,13 +398,41 @@ let s:n = globpath(&runtimepath, "colors/*.vim")
 let s:names = sort(map(split(s:n, "\n"), 'substitute(v:val, "\\c.*[/\\\\:\\]]\\([^/\\\\:]*\\)\\.vim", "\\1", "")'), 1)
 
 " define all the submenu entries
-let s:idx = 100
+let s:cs_idx = 100
 for s:name in s:names
-  exe "an 20.450." . s:idx . ' &Edit.C&olor\ Scheme.' . s:name . " :colors " . s:name . "<CR>"
-  let s:idx = s:idx + 10
+  exe "an 20.450." . s:cs_idx . ' &Edit.C&olor\ Scheme.' . s:name . " :colors " . s:name . "<CR>"
+  let s:cs_idx = s:cs_idx + 10
 endfor
-unlet s:name s:names s:n s:idx
+exe "an 20.450." . s:cs_idx . ' &Edit.C&olor\ Scheme.-SEP- <Nop>'
+let s:cs_idx = s:cs_idx + 10
+exe "an <silent> 20.450." . s:cs_idx '&Edit.C&olor\ Scheme.Find\ More\ Color\ Schemes' ":call <SID>Colorschemes()<CR>"
+let s:cs_idx = s:cs_idx + 10
+unlet s:name s:names s:n
 
+let s:undo_colorschemes = ['aun &Edit.C&olor\ Scheme.Find\ More\ Color\ Schemes']
+func! s:Colorschemes()
+  for cmd in s:undo_colorschemes
+    exe "silent! " . cmd
+  endfor
+  let s:undo_colorschemes = []
+
+  let s = globpath(&packpath, "pack/*/{opt,start}/*/colors/*.vim")
+  let names = sort(map(split(s, "\n"), 'substitute(v:val, "\\c.*[/\\\\:\\]]\\([^/\\\\:]*\\)\\.vim", "\\1", "")'), 1)
+  let n = s:cs_idx
+  for name in names
+    let menuname = '&Edit.C&olor\ Scheme.' . name
+    exe 'an 20.450.' . n . ' ' . menuname . " :colors " . name . "<CR>"
+    let s:undo_colorschemes += ['aun ' . menuname]
+    let n += 10
+  endfor
+  if empty(names)
+    echomsg "Could not find other color schemes"
+  elseif len(names) == 1
+    echomsg "Found color scheme " . names[0]
+  else
+    echomsg "Found " . len(names) . " more color schemes"
+  endif
+endfun
 
 " Setup the Edit.Keymap submenu
 if has("keymap")
@@ -1233,6 +1264,9 @@ if has("gui_macvim")
   macm Window.Select\ Next\ Tab			key=<D-}>
   macm Window.Select\ Previous\ Tab		key=<D-{>
   macm Window.Bring\ All\ To\ Front		action=arrangeInFront:
+  macm Window.Stay\ in\ Front 	action=stayInFront:
+  macm Window.Stay\ in\ Back 	action=stayInBack:
+  macm Window.Stay\ Level\ Normal action=stayLevelNormal:
 
   macm Help.MacVim\ Help			key=<D-?>
   macm Help.MacVim\ Website			action=openWebsite:

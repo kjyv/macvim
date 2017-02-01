@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -482,7 +482,7 @@ mf_put(
     flags = hp->bh_flags;
 
     if ((flags & BH_LOCKED) == 0)
-	EMSG(_("E293: block was not locked"));
+	IEMSG(_("E293: block was not locked"));
     flags &= ~BH_LOCKED;
     if (dirty)
     {

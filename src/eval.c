@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -233,8 +233,6 @@ static int get_string_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int get_lit_string_tv(char_u **arg, typval_T *rettv, int evaluate);
 static int free_unref_items(int copyID);
 static int get_env_tv(char_u **arg, typval_T *rettv, int evaluate);
-
-
 static int get_env_len(char_u **arg);
 static char_u * make_expanded_name(char_u *in_start, char_u *expr_start, char_u *expr_end, char_u *in_end);
 static void check_vars(char_u *name, int len);
@@ -244,13 +242,37 @@ static void list_one_var(dictitem_T *v, char_u *prefix, int *first);
 static void list_one_var_a(char_u *prefix, char_u *name, int type, char_u *string, int *first);
 static char_u *find_option_end(char_u **arg, int *opt_flags);
 
-#ifdef EBCDIC
-static int compare_func_name(const void *s1, const void *s2);
-static void sortFunctions();
-#endif
-
 /* for VIM_VERSION_ defines */
 #include "version.h"
+
+
+#if defined(EBCDIC) || defined(PROTO)
+/*
+ * Compare struct fst by function name.
+ */
+    static int
+compare_func_name(const void *s1, const void *s2)
+{
+    struct fst *p1 = (struct fst *)s1;
+    struct fst *p2 = (struct fst *)s2;
+
+    return STRCMP(p1->f_name, p2->f_name);
+}
+
+/*
+ * Sort the function table by function name.
+ * The sorting of the table above is ASCII dependant.
+ * On machines using EBCDIC we have to sort it.
+ */
+    static void
+sortFunctions(void)
+{
+    int		funcCnt = (int)(sizeof(functions) / sizeof(struct fst)) - 1;
+
+    qsort(functions, (size_t)funcCnt, sizeof(struct fst), compare_func_name);
+}
+#endif
+
 
 /*
  * Initialize the global and v: variables.
@@ -272,7 +294,7 @@ eval_init(void)
 	p = &vimvars[i];
 	if (STRLEN(p->vv_name) > 16)
 	{
-	    EMSG("INTERNAL: name too long, increase size of dictitem16_T");
+	    IEMSG("INTERNAL: name too long, increase size of dictitem16_T");
 	    getout(1);
 	}
 	STRCPY(p->vv_di.di_key, p->vv_name);
@@ -841,7 +863,7 @@ restore_vimvar(int idx, typval_T *save_tv)
     {
 	hi = hash_find(&vimvarht, vimvars[idx].vv_di.di_key);
 	if (HASHITEM_EMPTY(hi))
-	    EMSG2(_(e_intern2), "restore_vimvar()");
+	    internal_error("restore_vimvar()");
 	else
 	    hash_remove(&vimvarht, hi);
     }
@@ -1310,7 +1332,7 @@ ex_let_vars(
 	}
 	else if (*arg != ',' && *arg != ']')
 	{
-	    EMSG2(_(e_intern2), "ex_let_vars()");
+	    internal_error("ex_let_vars()");
 	    return FAIL;
 	}
     }
@@ -2832,7 +2854,7 @@ do_unlet(char_u *name, int forceit)
 	    }
 	    if (d == NULL)
 	    {
-		EMSG2(_(e_intern2), "do_unlet()");
+		internal_error("do_unlet()");
 		return FAIL;
 	    }
 	}
@@ -4087,21 +4109,12 @@ eval6(
 		{
 		    if (n2 == 0)	/* give an error message? */
 		    {
-#ifdef FEAT_NUM64
 			if (n1 == 0)
-			    n1 = -0x7fffffffffffffff - 1; /* similar to NaN */
+			    n1 = VARNUM_MIN; /* similar to NaN */
 			else if (n1 < 0)
-			    n1 = -0x7fffffffffffffff;
+			    n1 = -VARNUM_MAX;
 			else
-			    n1 = 0x7fffffffffffffff;
-#else
-			if (n1 == 0)
-			    n1 = -0x7fffffffL - 1L;	/* similar to NaN */
-			else if (n1 < 0)
-			    n1 = -0x7fffffffL;
-			else
-			    n1 = 0x7fffffffL;
-#endif
+			    n1 = VARNUM_MAX;
 		    }
 		    else
 			n1 = n1 / n2;
@@ -4169,7 +4182,7 @@ eval7(
     rettv->v_type = VAR_UNKNOWN;
 
     /*
-     * Skip '!' and '-' characters.  They are handled later.
+     * Skip '!', '-' and '+' characters.  They are handled later.
      */
     start_leader = *arg;
     while (**arg == '!' || **arg == '-' || **arg == '+')
@@ -4341,10 +4354,17 @@ eval7(
 		 * use its contents. */
 		s = deref_func_name(s, &len, &partial, !evaluate);
 
-		/* Invoke the function. */
-		ret = get_func_tv(s, len, rettv, arg,
-			  curwin->w_cursor.lnum, curwin->w_cursor.lnum,
-			  &len, evaluate, partial, NULL);
+		/* Need to make a copy, in case evaluating the arguments makes
+		 * the name invalid. */
+		s = vim_strsave(s);
+		if (s == NULL)
+		    ret = FAIL;
+		else
+		    /* Invoke the function. */
+		    ret = get_func_tv(s, len, rettv, arg,
+			      curwin->w_cursor.lnum, curwin->w_cursor.lnum,
+			      &len, evaluate, partial, NULL);
+		vim_free(s);
 
 		/* If evaluate is FALSE rettv->v_type was not set in
 		 * get_func_tv, but it's needed in handle_subscript() to parse
@@ -4926,7 +4946,7 @@ get_string_tv(char_u **arg, typval_T *rettv, int evaluate)
 			  break;
 
 			    /* Special key, e.g.: "\<C-W>" */
-		case '<': extra = trans_special(&p, name, TRUE);
+		case '<': extra = trans_special(&p, name, TRUE, TRUE);
 			  if (extra != 0)
 			  {
 			      name += extra;
@@ -4943,7 +4963,9 @@ get_string_tv(char_u **arg, typval_T *rettv, int evaluate)
 
     }
     *name = NUL;
-    *arg = p + 1;
+    if (*p != NUL) /* just in case */
+	++p;
+    *arg = p;
 
     return OK;
 }
@@ -5622,7 +5644,7 @@ set_ref_in_item(
     else if (tv->v_type == VAR_CHANNEL)
     {
 	channel_T   *ch =tv->vval.v_channel;
-	int	    part;
+	ch_part_T   part;
 	typval_T    dtv;
 	jsonq_T	    *jq;
 	cbq_T	    *cq;
@@ -5630,7 +5652,7 @@ set_ref_in_item(
 	if (ch != NULL && ch->ch_copyID != copyID)
 	{
 	    ch->ch_copyID = copyID;
-	    for (part = PART_SOCK; part <= PART_IN; ++part)
+	    for (part = PART_SOCK; part < PART_COUNT; ++part)
 	    {
 		for (jq = ch->ch_part[part].ch_json_head.jq_next; jq != NULL;
 							     jq = jq->jq_next)
@@ -5678,7 +5700,7 @@ get_var_special_name(int nr)
 	case VVAL_NONE:  return "v:none";
 	case VVAL_NULL:  return "v:null";
     }
-    EMSG2(_(e_intern2), "get_var_special_name()");
+    internal_error("get_var_special_name()");
     return "42";
 }
 
@@ -5964,6 +5986,22 @@ string2float(
     char	*s = (char *)text;
     float_T	f;
 
+    /* MS-Windows does not deal with "inf" and "nan" properly. */
+    if (STRNICMP(text, "inf", 3) == 0)
+    {
+	*value = INFINITY;
+	return 3;
+    }
+    if (STRNICMP(text, "-inf", 3) == 0)
+    {
+	*value = -INFINITY;
+	return 4;
+    }
+    if (STRNICMP(text, "nan", 3) == 0)
+    {
+	*value = NAN;
+	return 3;
+    }
     f = strtod(s, &s);
     *value = f;
     return (int)((char_u *)s - text);
@@ -7152,7 +7190,7 @@ get_tv_number_chk(typval_T *varp, int *denote)
 	    break;
 #endif
 	case VAR_UNKNOWN:
-	    EMSG2(_(e_intern2), "get_tv_number(UNKNOWN)");
+	    internal_error("get_tv_number(UNKNOWN)");
 	    break;
     }
     if (denote == NULL)		/* useful for values that must be unsigned */
@@ -7199,7 +7237,7 @@ get_tv_float(typval_T *varp)
 	    break;
 # endif
 	case VAR_UNKNOWN:
-	    EMSG2(_(e_intern2), "get_tv_float(UNKNOWN)");
+	    internal_error("get_tv_float(UNKNOWN)");
 	    break;
     }
     return 0;
@@ -7283,7 +7321,7 @@ get_tv_string_buf_chk(typval_T *varp, char_u *buf)
 		if (job == NULL)
 		    return (char_u *)"no process";
 		status = job->jv_status == JOB_FAILED ? "fail"
-				: job->jv_status == JOB_ENDED ? "dead"
+				: job->jv_status >= JOB_ENDED ? "dead"
 				: "run";
 # ifdef UNIX
 		vim_snprintf((char *)buf, NUMBUFLEN,
@@ -7305,7 +7343,7 @@ get_tv_string_buf_chk(typval_T *varp, char_u *buf)
 #ifdef FEAT_JOB_CHANNEL
 	    {
 		channel_T *channel = varp->vval.v_channel;
-		char      *status = channel_status(channel);
+		char      *status = channel_status(channel, -1);
 
 		if (channel == NULL)
 		    vim_snprintf((char *)buf, NUMBUFLEN, "channel %s", status);
@@ -7733,7 +7771,7 @@ set_var(
 		return;
 	    }
 	    else if (v->di_tv.v_type != tv->v_type)
-		EMSG2(_(e_intern2), "set_var()");
+		internal_error("set_var()");
 	}
 
 	clear_tv(&v->di_tv);
@@ -7962,7 +8000,7 @@ copy_tv(typval_T *from, typval_T *to)
 	    }
 	    break;
 	case VAR_UNKNOWN:
-	    EMSG2(_(e_intern2), "copy_tv(UNKNOWN)");
+	    internal_error("copy_tv(UNKNOWN)");
 	    break;
     }
 }
@@ -8036,7 +8074,7 @@ item_copy(
 		ret = FAIL;
 	    break;
 	case VAR_UNKNOWN:
-	    EMSG2(_(e_intern2), "item_copy(UNKNOWN)");
+	    internal_error("item_copy(UNKNOWN)");
 	    ret = FAIL;
     }
     --recurse;
@@ -8470,9 +8508,23 @@ getwinvar(
 		  || switch_win(&oldcurwin, &oldtabpage, win, tp, TRUE) == OK)
 #endif
 	{
-	    if (*varname == '&')	/* window-local-option */
+	    if (*varname == '&')
 	    {
-		if (get_option_tv(&varname, rettv, 1) == OK)
+		if (varname[1] == NUL)
+		{
+		    /* get all window-local options in a dict */
+		    dict_T	*opts = get_winbuf_options(FALSE);
+
+		    if (opts != NULL)
+		    {
+			rettv->v_type = VAR_DICT;
+			rettv->vval.v_dict = opts;
+			++opts->dv_refcount;
+			done = TRUE;
+		    }
+		}
+		else if (get_option_tv(&varname, rettv, 1) == OK)
+		    /* window-local-option */
 		    done = TRUE;
 	    }
 	    else
@@ -8926,60 +8978,6 @@ last_set_msg(scid_T scriptID)
     }
 }
 
-/*
- * List v:oldfiles in a nice way.
- */
-    void
-ex_oldfiles(exarg_T *eap UNUSED)
-{
-    list_T	*l = vimvars[VV_OLDFILES].vv_list;
-    listitem_T	*li;
-    int		nr = 0;
-
-    if (l == NULL)
-	msg((char_u *)_("No old files"));
-    else
-    {
-	msg_start();
-	msg_scroll = TRUE;
-	for (li = l->lv_first; li != NULL && !got_int; li = li->li_next)
-	{
-	    msg_outnum((long)++nr);
-	    MSG_PUTS(": ");
-	    msg_outtrans(get_tv_string(&li->li_tv));
-	    msg_putchar('\n');
-	    out_flush();	    /* output one line at a time */
-	    ui_breakcheck();
-	}
-	/* Assume "got_int" was set to truncate the listing. */
-	got_int = FALSE;
-
-#ifdef FEAT_BROWSE_CMD
-	if (cmdmod.browse)
-	{
-	    quit_more = FALSE;
-	    nr = prompt_for_number(FALSE);
-	    msg_starthere();
-	    if (nr > 0)
-	    {
-		char_u *p = list_find_str(get_vim_var_list(VV_OLDFILES),
-								    (long)nr);
-
-		if (p != NULL)
-		{
-		    p = expand_env_save(p);
-		    eap->arg = p;
-		    eap->cmdidx = CMD_edit;
-		    cmdmod.browse = FALSE;
-		    do_exedit(eap, NULL);
-		    vim_free(p);
-		}
-	    }
-	}
-#endif
-    }
-}
-
 /* reset v:option_new, v:option_old and v:option_type */
     void
 reset_v_option_vars(void)
@@ -9242,28 +9240,30 @@ fill_assert_error(
 
     if (opt_msg_tv->v_type != VAR_UNKNOWN)
     {
-	ga_concat(gap, tv2string(opt_msg_tv, &tofree, numbuf, 0));
+	ga_concat(gap, echo_string(opt_msg_tv, &tofree, numbuf, 0));
+	vim_free(tofree);
+	ga_concat(gap, (char_u *)": ");
+    }
+
+    if (atype == ASSERT_MATCH || atype == ASSERT_NOTMATCH)
+	ga_concat(gap, (char_u *)"Pattern ");
+    else if (atype == ASSERT_NOTEQUAL)
+	ga_concat(gap, (char_u *)"Expected not equal to ");
+    else
+	ga_concat(gap, (char_u *)"Expected ");
+    if (exp_str == NULL)
+    {
+	ga_concat_esc(gap, tv2string(exp_tv, &tofree, numbuf, 0));
 	vim_free(tofree);
     }
     else
+	ga_concat_esc(gap, exp_str);
+    if (atype != ASSERT_NOTEQUAL)
     {
-	if (atype == ASSERT_MATCH || atype == ASSERT_NOTMATCH)
-	    ga_concat(gap, (char_u *)"Pattern ");
-	else
-	    ga_concat(gap, (char_u *)"Expected ");
-	if (exp_str == NULL)
-	{
-	    ga_concat_esc(gap, tv2string(exp_tv, &tofree, numbuf, 0));
-	    vim_free(tofree);
-	}
-	else
-	    ga_concat_esc(gap, exp_str);
 	if (atype == ASSERT_MATCH)
 	    ga_concat(gap, (char_u *)" does not match ");
 	else if (atype == ASSERT_NOTMATCH)
 	    ga_concat(gap, (char_u *)" does match ");
-	else if (atype == ASSERT_NOTEQUAL)
-	    ga_concat(gap, (char_u *)" differs from ");
 	else
 	    ga_concat(gap, (char_u *)" but got ");
 	ga_concat_esc(gap, tv2string(got_tv, &tofree, numbuf, 0));

@@ -25,6 +25,60 @@ func Test_complete_wildmenu()
   set nowildmenu
 endfunc
 
+func Test_match_completion()
+  if !has('cmdline_compl')
+    return
+  endif
+  hi Aardig ctermfg=green
+  call feedkeys(":match \<Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"match Aardig', getreg(':'))
+  call feedkeys(":match \<S-Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"match none', getreg(':'))
+endfunc
+
+func Test_highlight_completion()
+  if !has('cmdline_compl')
+    return
+  endif
+  hi Aardig ctermfg=green
+  call feedkeys(":hi \<Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"hi Aardig', getreg(':'))
+  call feedkeys(":hi li\<S-Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"hi link', getreg(':'))
+  call feedkeys(":hi d\<S-Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"hi default', getreg(':'))
+  call feedkeys(":hi c\<S-Tab>\<Home>\"\<CR>", 'xt')
+  call assert_equal('"hi clear', getreg(':'))
+endfunc
+
+func Test_expr_completion()
+  if !has('cmdline_compl')
+    return
+  endif
+  for cmd in [
+	\ 'let a = ',
+	\ 'if',
+	\ 'elseif',
+	\ 'while',
+	\ 'for',
+	\ 'echo',
+	\ 'echon',
+	\ 'execute',
+	\ 'echomsg',
+	\ 'echoerr',
+	\ 'call',
+	\ 'return',
+	\ 'cexpr',
+	\ 'caddexpr',
+	\ 'cgetexpr',
+	\ 'lexpr',
+	\ 'laddexpr',
+	\ 'lgetexpr']
+    call feedkeys(":" . cmd . " getl\<Tab>\<Home>\"\<CR>", 'xt')
+    call assert_equal('"' . cmd . ' getline(', getreg(':'))
+  endfor
+endfunc
+
 func Test_getcompletion()
   if !has('cmdline_compl')
     return
@@ -94,6 +148,10 @@ func Test_getcompletion()
   call assert_true(index(l, 'runtest.vim') >= 0)
   let l = getcompletion('walk', 'file')
   call assert_equal([], l)
+  set wildignore=*.vim
+  let l = getcompletion('run', 'file', 1)
+  call assert_true(index(l, 'runtest.vim') < 0)
+  set wildignore&
 
   let l = getcompletion('ha', 'filetype')
   call assert_true(index(l, 'hamster') >= 0)
@@ -123,6 +181,11 @@ func Test_getcompletion()
   let l = getcompletion('er', 'highlight')
   call assert_true(index(l, 'ErrorMsg') >= 0)
   let l = getcompletion('dark', 'highlight')
+  call assert_equal([], l)
+
+  let l = getcompletion('', 'messages')
+  call assert_true(index(l, 'clear') >= 0)
+  let l = getcompletion('not', 'messages')
   call assert_equal([], l)
 
   if has('cscope')
@@ -175,4 +238,71 @@ func Test_getcompletion()
   call delete('Xtags')
 
   call assert_fails('call getcompletion("", "burp")', 'E475:')
+endfunc
+
+func Test_expand_star_star()
+  call mkdir('a/b', 'p')
+  call writefile(['asdfasdf'], 'a/b/fileXname')
+  call feedkeys(":find **/fileXname\<Tab>\<CR>", 'xt')
+  call assert_equal('find a/b/fileXname', getreg(':'))
+  bwipe!
+  call delete('a', 'rf')
+endfunc
+
+func Test_paste_in_cmdline()
+  let @a = "def"
+  call feedkeys(":abc \<C-R>a ghi\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"abc def ghi', @:)
+
+  new
+  call setline(1, 'asdf.x /tmp/some verylongword a;b-c*d ')
+
+  call feedkeys(":aaa \<C-R>\<C-W> bbb\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"aaa asdf bbb', @:)
+
+  call feedkeys("ft:aaa \<C-R>\<C-F> bbb\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"aaa /tmp/some bbb', @:)
+
+  set incsearch
+  call feedkeys("fy:aaa veryl\<C-R>\<C-W> bbb\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"aaa verylongword bbb', @:)
+
+  call feedkeys("f;:aaa \<C-R>\<C-A> bbb\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"aaa a;b-c*d bbb', @:)
+
+  call feedkeys(":\<C-\>etoupper(getline(1))\<CR>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"ASDF.X /TMP/SOME VERYLONGWORD A;B-C*D ', @:)
+  bwipe!
+endfunc
+
+func Test_remove_char_in_cmdline()
+  call feedkeys(":abc def\<S-Left>\<Del>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"abc ef', @:)
+
+  call feedkeys(":abc def\<S-Left>\<BS>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"abcdef', @:)
+
+  call feedkeys(":abc def ghi\<S-Left>\<C-W>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"abc ghi', @:)
+
+  call feedkeys(":abc def\<S-Left>\<C-U>\<C-B>\"\<CR>", 'tx')
+  call assert_equal('"def', @:)
+endfunc
+
+func Test_illegal_address()
+  new
+  2;'(
+  2;')
+  quit
+endfunc
+
+func Test_cmdline_complete_wildoptions()
+  help
+  call feedkeys(":tag /\<c-a>\<c-b>\"\<cr>", 'tx')
+  let a = join(sort(split(@:)),' ')
+  set wildoptions=tagfile
+  call feedkeys(":tag /\<c-a>\<c-b>\"\<cr>", 'tx')
+  let b = join(sort(split(@:)),' ')
+  call assert_equal(a, b)
+  bw!
 endfunc

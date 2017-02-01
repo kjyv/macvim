@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -77,9 +77,6 @@ struct builtin_term
 static struct builtin_term *find_builtin_term(char_u *name);
 static void parse_builtin_tcap(char_u *s);
 static void term_color(char_u *s, int n);
-#ifdef FEAT_TERMGUICOLORS
-static void term_rgb_color(char_u *s, long_u rgb);
-#endif
 static void gather_termleader(void);
 #ifdef FEAT_TERMRESPONSE
 static void req_codes_from_term(void);
@@ -860,6 +857,8 @@ static struct builtin_term builtin_termcaps[] =
     {(int)KS_8F,	IF_EB("\033[38;2;%lu;%lu;%lum", ESC_STR "[38;2;%lu;%lu;%lum")},
     {(int)KS_8B,	IF_EB("\033[48;2;%lu;%lu;%lum", ESC_STR "[48;2;%lu;%lu;%lum")},
 #  endif
+    {(int)KS_CBE,	IF_EB("\033[?2004h", ESC_STR "[?2004h")},
+    {(int)KS_CBD,	IF_EB("\033[?2004l", ESC_STR "[?2004l")},
 
     {K_UP,		IF_EB("\033O*A", ESC_STR "O*A")},
     {K_DOWN,		IF_EB("\033O*B", ESC_STR "O*B")},
@@ -905,13 +904,15 @@ static struct builtin_term builtin_termcaps[] =
     {K_ZEND,		IF_EB("\033[8;*~", ESC_STR "[8;*~")},
     {K_PAGEUP,		IF_EB("\033[5;*~", ESC_STR "[5;*~")},
     {K_PAGEDOWN,	IF_EB("\033[6;*~", ESC_STR "[6;*~")},
-    {K_KPLUS,		IF_EB("\033O*k", ESC_STR "O*k")},	/* keypad plus */
-    {K_KMINUS,		IF_EB("\033O*m", ESC_STR "O*m")},	/* keypad minus */
-    {K_KDIVIDE,		IF_EB("\033O*o", ESC_STR "O*o")},	/* keypad / */
-    {K_KMULTIPLY,	IF_EB("\033O*j", ESC_STR "O*j")},	/* keypad * */
-    {K_KENTER,		IF_EB("\033O*M", ESC_STR "O*M")},	/* keypad Enter */
-    {K_KPOINT,		IF_EB("\033O*n", ESC_STR "O*n")},	/* keypad . */
-    {K_KDEL,		IF_EB("\033[3;*~", ESC_STR "[3;*~")},	/* keypad Del */
+    {K_KPLUS,		IF_EB("\033O*k", ESC_STR "O*k")},     /* keypad plus */
+    {K_KMINUS,		IF_EB("\033O*m", ESC_STR "O*m")},     /* keypad minus */
+    {K_KDIVIDE,		IF_EB("\033O*o", ESC_STR "O*o")},     /* keypad / */
+    {K_KMULTIPLY,	IF_EB("\033O*j", ESC_STR "O*j")},     /* keypad * */
+    {K_KENTER,		IF_EB("\033O*M", ESC_STR "O*M")},     /* keypad Enter */
+    {K_KPOINT,		IF_EB("\033O*n", ESC_STR "O*n")},     /* keypad . */
+    {K_KDEL,		IF_EB("\033[3;*~", ESC_STR "[3;*~")}, /* keypad Del */
+    {K_PS,		IF_EB("\033[200~", ESC_STR "[200~")}, /* paste start */
+    {K_PE,		IF_EB("\033[201~", ESC_STR "[201~")}, /* paste end */
 
     {BT_EXTRA_KEYS,   ""},
     {TERMCAP2KEY('k', '0'), IF_EB("\033[10;*~", ESC_STR "[10;*~")}, /* F0 */
@@ -1227,6 +1228,8 @@ static struct builtin_term builtin_termcaps[] =
     {K_KMULTIPLY,	"[KMULTIPLY]"},
     {K_KENTER,		"[KENTER]"},
     {K_KPOINT,		"[KPOINT]"},
+    {K_PS,		"[PASTE-START]"},
+    {K_PE,		"[PASTE-END]"},
     {K_K0,		"[K0]"},
     {K_K1,		"[K1]"},
     {K_K2,		"[K2]"},
@@ -1288,10 +1291,10 @@ termgui_get_color(char_u *name)
     return t;
 }
 
-    long_u
+    guicolor_T
 termgui_mch_get_rgb(guicolor_T color)
 {
-    return (long_u)color;
+    return color;
 }
 #endif
 
@@ -1547,6 +1550,8 @@ set_termname(char_u *term)
 				{KS_CSI, "SI"}, {KS_CEI, "EI"},
 				{KS_U7, "u7"}, {KS_RBG, "RB"},
 				{KS_8F, "8f"}, {KS_8B, "8b"},
+				{KS_CBE, "BE"}, {KS_CBD, "BD"},
+				{KS_CPS, "PS"}, {KS_CPE, "PE"},
 				{(enum SpecialKey)0, NULL}
 			    };
 
@@ -2640,24 +2645,13 @@ term_color(char_u *s, int n)
 }
 
 #if defined(FEAT_TERMGUICOLORS) || defined(PROTO)
-    void
-term_fg_rgb_color(long_u rgb)
-{
-    term_rgb_color(T_8F, rgb);
-}
 
-    void
-term_bg_rgb_color(long_u rgb)
-{
-    term_rgb_color(T_8B, rgb);
-}
-
-#define RED(rgb)   ((rgb>>16)&0xFF)
-#define GREEN(rgb) ((rgb>> 8)&0xFF)
-#define BLUE(rgb)  ((rgb    )&0xFF)
+#define RED(rgb)   (((long_u)(rgb) >> 16) & 0xFF)
+#define GREEN(rgb) (((long_u)(rgb) >>  8) & 0xFF)
+#define BLUE(rgb)  (((long_u)(rgb)      ) & 0xFF)
 
     static void
-term_rgb_color(char_u *s, long_u rgb)
+term_rgb_color(char_u *s, guicolor_T rgb)
 {
 #define MAX_COLOR_STR_LEN 100
     char	buf[MAX_COLOR_STR_LEN];
@@ -2665,6 +2659,18 @@ term_rgb_color(char_u *s, long_u rgb)
     vim_snprintf(buf, MAX_COLOR_STR_LEN,
 				  (char *)s, RED(rgb), GREEN(rgb), BLUE(rgb));
     OUT_STR(buf);
+}
+
+    void
+term_fg_rgb_color(guicolor_T rgb)
+{
+    term_rgb_color(T_8F, rgb);
+}
+
+    void
+term_bg_rgb_color(guicolor_T rgb)
+{
+    term_rgb_color(T_8B, rgb);
 }
 #endif
 
@@ -3148,6 +3154,7 @@ starttermcap(void)
     {
 	out_str(T_TI);			/* start termcap mode */
 	out_str(T_KS);			/* start "keypad transmit" mode */
+	out_str(T_BE);			/* enable bracketed paste mode */
 	out_flush();
 	termcap_active = TRUE;
 	screen_start();			/* don't know where cursor is now */
@@ -3197,6 +3204,7 @@ stoptermcap(void)
 	    check_for_codes_from_term();
 	}
 #endif
+	out_str(T_BD);			/* disable bracketed paste mode */
 	out_str(T_KE);			/* stop "keypad transmit" mode */
 	out_flush();
 	termcap_active = FALSE;
@@ -4945,7 +4953,7 @@ check_termcode(
 		button = getdigits(&p);
 		mouse_code = 0;
 
-		switch( button )
+		switch (button)
 		{
 		    case 4: mouse_code = MOUSE_LEFT; break;
 		    case 1: mouse_code = MOUSE_RIGHT; break;
@@ -4953,7 +4961,7 @@ check_termcode(
 		    default: return -1;
 		}
 
-		switch( action )
+		switch (action)
 		{
 		    case 31: /* Initial press */
 			if (*p++ != ';')
@@ -5102,9 +5110,11 @@ check_termcode(
 	    else if (orig_num_clicks == 4)
 		modifiers |= MOD_MASK_4CLICK;
 
-	    /* Work out our pseudo mouse event */
+	    /* Work out our pseudo mouse event. Note that MOUSE_RELEASE gets
+	     * added, then it's not mouse up/down. */
 	    key_name[0] = (int)KS_EXTRA;
-	    if (wheel_code != 0)
+            if (wheel_code != 0
+			      && (wheel_code & MOUSE_RELEASE) != MOUSE_RELEASE)
 	    {
 		if (wheel_code & MOUSE_CTRL)
 		    modifiers |= MOD_MASK_CTRL;
@@ -5435,7 +5445,7 @@ replace_termcodes(
 	    }
 #endif
 
-	    slen = trans_special(&src, result + dlen, TRUE);
+	    slen = trans_special(&src, result + dlen, TRUE, FALSE);
 	    if (slen)
 	    {
 		dlen += slen;
@@ -6075,8 +6085,12 @@ hex_digit(int c)
     guicolor_T
 gui_get_color_cmn(char_u *name)
 {
-    /* On MS-Windows an RGB macro is available and it's different from ours,
-     * but does what is needed. */
+    /* On MS-Windows an RGB macro is available and it produces 0x00bbggrr color
+     * values as used by the MS-Windows GDI api.  It should be used only for
+     * MS-Windows GDI builds. */
+# if defined(RGB) && defined(WIN32) && !defined(FEAT_GUI)
+#  undef RGB
+# endif
 # ifndef RGB
 #  define RGB(r, g, b)	((r<<16) | (g<<8) | (b))
 # endif

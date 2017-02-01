@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -27,10 +27,6 @@
 /* Is there any system that doesn't have access()? */
 #define USE_MCH_ACCESS
 
-#if (defined(sun) || defined(__FreeBSD__)) && defined(S_ISCHR)
-# define OPEN_CHR_FILES
-static int is_dev_fd_file(char_u *fname);
-#endif
 #ifdef FEAT_MBYTE
 static char_u *next_fenc(char_u **pp);
 # ifdef FEAT_EVAL
@@ -214,7 +210,7 @@ filemess(
  * READ_KEEP_UNDO  don't clear undo info or read it from a file
  * READ_FIFO	read from fifo/socket instead of a file
  *
- * return FAIL for failure, OK otherwise
+ * return FAIL for failure, NOTDONE for directory (failure), or OK
  */
     int
 readfile(
@@ -278,9 +274,9 @@ readfile(
     int		msg_save = msg_scroll;
     linenr_T	read_no_eol_lnum = 0;   /* non-zero lnum when last line of
 					 * last read was missing the eol */
-    int		try_mac = (vim_strchr(p_ffs, 'm') != NULL);
-    int		try_dos = (vim_strchr(p_ffs, 'd') != NULL);
-    int		try_unix = (vim_strchr(p_ffs, 'x') != NULL);
+    int		try_mac;
+    int		try_dos;
+    int		try_unix;
     int		file_rewind = FALSE;
 #ifdef FEAT_MBYTE
     int		can_retry;
@@ -454,13 +450,18 @@ readfile(
 # endif
 						)
 	{
+	    int retval = FAIL;
+
 	    if (S_ISDIR(perm))
+	    {
 		filemess(curbuf, fname, (char_u *)_("is a directory"), 0);
+		retval = NOTDONE;
+	    }
 	    else
 		filemess(curbuf, fname, (char_u *)_("is not a file"), 0);
 	    msg_end();
 	    msg_scroll = msg_save;
-	    return FAIL;
+	    return retval;
 	}
 #endif
 #if defined(MSWIN)
@@ -737,6 +738,10 @@ readfile(
     curbuf->b_op_start.lnum = ((from == 0) ? 1 : from);
     curbuf->b_op_start.col = 0;
 
+    try_mac = (vim_strchr(p_ffs, 'm') != NULL);
+    try_dos = (vim_strchr(p_ffs, 'd') != NULL);
+    try_unix = (vim_strchr(p_ffs, 'x') != NULL);
+
 #ifdef FEAT_AUTOCMD
     if (!read_buffer)
     {
@@ -768,6 +773,11 @@ readfile(
 	else
 	    apply_autocmds_exarg(EVENT_FILEREADPRE, sfname, sfname,
 							    FALSE, NULL, eap);
+	/* autocommands may have changed it */
+	try_mac = (vim_strchr(p_ffs, 'm') != NULL);
+	try_dos = (vim_strchr(p_ffs, 'd') != NULL);
+	try_unix = (vim_strchr(p_ffs, 'x') != NULL);
+
 	if (msg_scrolled == n)
 	    msg_scroll = m;
 
@@ -2241,8 +2251,9 @@ rewind_retry:
 			len = (colnr_T)(ptr - line_start + 1);
 			if (fileformat == EOL_DOS)
 			{
-			    if (ptr[-1] == CAR)	/* remove CR */
+			    if (ptr > line_start && ptr[-1] == CAR)
 			    {
+				/* remove CR before NL */
 				ptr[-1] = NUL;
 				--len;
 			    }
@@ -2718,14 +2729,14 @@ failed:
     return OK;
 }
 
-#ifdef OPEN_CHR_FILES
+#if defined(OPEN_CHR_FILES) || defined(PROTO)
 /*
  * Returns TRUE if the file name argument is of the form "/dev/fd/\d\+",
  * which is the name of files used for process substitution output by
  * some shells on some operating systems, e.g., bash on SunOS.
  * Do not accept "/dev/fd/[012]", opening these may hang Vim.
  */
-    static int
+    int
 is_dev_fd_file(char_u *fname)
 {
     return (STRNCMP(fname, "/dev/fd/", 8) == 0
@@ -3015,6 +3026,9 @@ check_for_cryptkey(
 
 	    /* Remove cryptmethod specific header from the text. */
 	    header_len = crypt_get_header_len(method);
+	    if (*sizep <= header_len)
+		/* invalid header, buffer can't be encrypted */
+		return NULL;
 	    *filesizep += header_len;
 	    *sizep -= header_len;
 	    mch_memmove(ptr, ptr + header_len, (size_t)*sizep);
@@ -7175,7 +7189,7 @@ buf_reload(buf_T *buf, int orig_mode)
 #endif
 	    if (readfile(buf->b_ffname, buf->b_fname, (linenr_T)0,
 			(linenr_T)0,
-			(linenr_T)MAXLNUM, &ea, flags) == FAIL)
+			(linenr_T)MAXLNUM, &ea, flags) != OK)
 	    {
 #if defined(FEAT_AUTOCMD) && defined(FEAT_EVAL)
 		if (!aborting())
@@ -7800,6 +7814,7 @@ static AutoPatCmd *active_apc_list = NULL; /* stack of active autocommands */
  */
 static garray_T augroups = {0, 0, sizeof(char_u *), 10, NULL};
 #define AUGROUP_NAME(i) (((char_u **)augroups.ga_data)[i])
+/* use get_deleted_augroup() to get this */
 static char_u *deleted_augroup = NULL;
 
 /*
@@ -7832,6 +7847,14 @@ static event_T	last_event;
 static int	last_group;
 static int	autocmd_blocked = 0;	/* block all autocmds */
 
+    static char_u *
+get_deleted_augroup(void)
+{
+    if (deleted_augroup == NULL)
+	deleted_augroup = (char_u *)_("--Deleted--");
+    return deleted_augroup;
+}
+
 /*
  * Show the autocommands for one AutoPat.
  */
@@ -7855,7 +7878,7 @@ show_autocmd(AutoPat *ap, event_T event)
 	if (ap->group != AUGROUP_DEFAULT)
 	{
 	    if (AUGROUP_NAME(ap->group) == NULL)
-		msg_puts_attr(deleted_augroup, hl_attr(HLF_E));
+		msg_puts_attr(get_deleted_augroup(), hl_attr(HLF_E));
 	    else
 		msg_puts_attr(AUGROUP_NAME(ap->group), hl_attr(HLF_T));
 	    msg_puts((char_u *)"  ");
@@ -8050,6 +8073,8 @@ au_del_group(char_u *name)
     i = au_find_group(name);
     if (i == AUGROUP_ERROR)	/* the group doesn't exist */
 	EMSG2(_("E367: No such group: \"%s\""), name);
+    else if (i == current_augroup)
+	EMSG(_("E936: Cannot delete the current group"));
     else
     {
 	event_T	event;
@@ -8060,7 +8085,7 @@ au_del_group(char_u *name)
 					    event = (event_T)((int)event + 1))
 	{
 	    for (ap = first_autopat[(int)event]; ap != NULL; ap = ap->next)
-		if (ap->group == i)
+		if (ap->group == i && ap->pat != NULL)
 		{
 		    give_warning((char_u *)_("W19: Deleting augroup that is still in use"), TRUE);
 		    in_use = TRUE;
@@ -8071,9 +8096,7 @@ au_del_group(char_u *name)
 	vim_free(AUGROUP_NAME(i));
 	if (in_use)
 	{
-	    if (deleted_augroup == NULL)
-		deleted_augroup = (char_u *)_("--Deleted--");
-	    AUGROUP_NAME(i) = deleted_augroup;
+	    AUGROUP_NAME(i) = get_deleted_augroup();
 	}
 	else
 	    AUGROUP_NAME(i) = NULL;
@@ -8090,7 +8113,7 @@ au_find_group(char_u *name)
     int	    i;
 
     for (i = 0; i < augroups.ga_len; ++i)
-	if (AUGROUP_NAME(i) != NULL && AUGROUP_NAME(i) != deleted_augroup
+	if (AUGROUP_NAME(i) != NULL && AUGROUP_NAME(i) != get_deleted_augroup()
 		&& STRCMP(AUGROUP_NAME(i), name) == 0)
 	    return i;
     return AUGROUP_ERROR;
@@ -8158,7 +8181,7 @@ free_all_autocmds(void)
     for (i = 0; i < augroups.ga_len; ++i)
     {
 	s = ((char_u **)(augroups.ga_data))[i];
-	if (s != deleted_augroup)
+	if (s != get_deleted_augroup())
 	    vim_free(s);
     }
     ga_clear(&augroups);
@@ -9907,7 +9930,7 @@ get_augroup_name(expand_T *xp UNUSED, int idx)
 	return (char_u *)"END";
     if (idx >= augroups.ga_len)		/* end of list */
 	return NULL;
-    if (AUGROUP_NAME(idx) == NULL || AUGROUP_NAME(idx) == deleted_augroup)
+    if (AUGROUP_NAME(idx) == NULL || AUGROUP_NAME(idx) == get_deleted_augroup())
 	/* skip deleted entries */
 	return (char_u *)"";
     return AUGROUP_NAME(idx);		/* return a name */
@@ -9973,7 +9996,7 @@ get_event_name(expand_T *xp UNUSED, int idx)
     if (idx < augroups.ga_len)		/* First list group names, if wanted */
     {
 	if (!include_groups || AUGROUP_NAME(idx) == NULL
-				       || AUGROUP_NAME(idx) == deleted_augroup)
+				 || AUGROUP_NAME(idx) == get_deleted_augroup())
 	    return (char_u *)"";	/* skip deleted entries */
 	return AUGROUP_NAME(idx);	/* return a name */
     }

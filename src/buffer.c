@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -113,16 +113,19 @@ read_buffer(
 	 * it can be changed there. */
 	if (!readonlymode && !bufempty())
 	    changed();
-	else if (retval != FAIL)
+	else if (retval == OK)
 	    unchanged(curbuf, FALSE);
 
 #ifdef FEAT_AUTOCMD
+	if (retval == OK)
+	{
 # ifdef FEAT_EVAL
-	apply_autocmds_retval(EVENT_STDINREADPOST, NULL, NULL, FALSE,
+	    apply_autocmds_retval(EVENT_STDINREADPOST, NULL, NULL, FALSE,
 							curbuf, &retval);
 # else
-	apply_autocmds(EVENT_STDINREADPOST, NULL, NULL, FALSE, curbuf);
+	    apply_autocmds(EVENT_STDINREADPOST, NULL, NULL, FALSE, curbuf);
 # endif
+	}
 #endif
     }
     return retval;
@@ -220,6 +223,9 @@ open_buffer(
 # ifdef S_ISSOCK
 		      || S_ISSOCK(perm)
 # endif
+# ifdef OPEN_CHR_FILES
+		      || (S_ISCHR(perm) && is_dev_fd_file(curbuf->b_ffname))
+# endif
 		    ))
 		read_fifo = TRUE;
 	if (read_fifo)
@@ -291,7 +297,7 @@ open_buffer(
 #endif
        )
 	changed();
-    else if (retval != FAIL && !read_stdin && !read_fifo)
+    else if (retval == OK && !read_stdin && !read_fifo)
 	unchanged(curbuf, FALSE);
     save_file_ff(curbuf);		/* keep this fileformat */
 
@@ -325,7 +331,7 @@ open_buffer(
 # endif
 #endif
 
-    if (retval != FAIL)
+    if (retval == OK)
     {
 #ifdef FEAT_AUTOCMD
 	/*
@@ -447,6 +453,11 @@ close_buffer(
     int		is_curbuf;
     int		nwindows;
     bufref_T	bufref;
+# ifdef FEAT_WINDOWS
+    int		is_curwin = (curwin != NULL && curwin->w_buffer == buf);
+    win_T	*the_curwin = curwin;
+    tabpage_T	*the_curtab = curtab;
+# endif
 #endif
     int		unload_buf = (action != 0);
     int		del_buf = (action == DOBUF_DEL || action == DOBUF_WIPE);
@@ -473,9 +484,19 @@ close_buffer(
 	unload_buf = TRUE;
 #endif
 
+#ifdef FEAT_AUTOCMD
+    /* Disallow deleting the buffer when it is locked (already being closed or
+     * halfway a command that relies on it). Unloading is allowed. */
+    if (buf->b_locked > 0 && (del_buf || wipe_buf))
+    {
+	EMSG(_("E937: Attempt to delete a buffer that is in use"));
+	return;
+    }
+#endif
+
     if (win != NULL
 #ifdef FEAT_WINDOWS
-	&& win_valid(win)	/* in case autocommands closed the window */
+	&& win_valid_any_tab(win) /* in case autocommands closed the window */
 #endif
 	    )
     {
@@ -496,7 +517,7 @@ close_buffer(
     /* When the buffer is no longer in a window, trigger BufWinLeave */
     if (buf->b_nwindows == 1)
     {
-	buf->b_closing = TRUE;
+	++buf->b_locked;
 	if (apply_autocmds(EVENT_BUFWINLEAVE, buf->b_fname, buf->b_fname,
 								  FALSE, buf)
 		&& !bufref_valid(&bufref))
@@ -506,7 +527,7 @@ aucmd_abort:
 	    EMSG(_(e_auabort));
 	    return;
 	}
-	buf->b_closing = FALSE;
+	--buf->b_locked;
 	if (abort_if_last && one_window())
 	    /* Autocommands made this the only window. */
 	    goto aucmd_abort;
@@ -515,13 +536,13 @@ aucmd_abort:
 	 * BufHidden */
 	if (!unload_buf)
 	{
-	    buf->b_closing = TRUE;
+	    ++buf->b_locked;
 	    if (apply_autocmds(EVENT_BUFHIDDEN, buf->b_fname, buf->b_fname,
 								  FALSE, buf)
 		    && !bufref_valid(&bufref))
 		/* Autocommands deleted the buffer. */
 		goto aucmd_abort;
-	    buf->b_closing = FALSE;
+	    --buf->b_locked;
 	    if (abort_if_last && one_window())
 		/* Autocommands made this the only window. */
 		goto aucmd_abort;
@@ -531,6 +552,19 @@ aucmd_abort:
 	    return;
 # endif
     }
+
+# ifdef FEAT_WINDOWS
+    /* If the buffer was in curwin and the window has changed, go back to that
+     * window, if it still exists.  This avoids that ":edit x" triggering a
+     * "tabnext" BufUnload autocmd leaves a window behind without a buffer. */
+    if (is_curwin && curwin != the_curwin &&  win_valid_any_tab(the_curwin))
+    {
+	block_autocmds();
+	goto_tabpage_win(the_curtab, the_curwin);
+	unblock_autocmds();
+    }
+# endif
+
     nwindows = buf->b_nwindows;
 #endif
 
@@ -546,6 +580,15 @@ aucmd_abort:
     /* Always remove the buffer when there is no file name. */
     if (buf->b_ffname == NULL)
 	del_buf = TRUE;
+
+    /* When closing the current buffer stop Visual mode before freeing
+     * anything. */
+    if (buf == curbuf && VIsual_active
+#if defined(EXITFREE)
+	    && !entered_free_all_mem
+#endif
+	    )
+	end_visual_mode();
 
     /*
      * Free all things allocated for this buffer.
@@ -581,7 +624,7 @@ aucmd_abort:
 
     if (
 #ifdef FEAT_WINDOWS
-	win_valid(win) &&
+	win_valid_any_tab(win) &&
 #else
 	win != NULL &&
 #endif
@@ -667,7 +710,8 @@ buf_clear_file(buf_T *buf)
 
 /*
  * buf_freeall() - free all things allocated for a buffer that are related to
- * the file.  flags:
+ * the file.  Careful: get here with "curwin" NULL when exiting.
+ * flags:
  * BFA_DEL	  buffer is going to be deleted
  * BFA_WIPE	  buffer is going to be wiped out
  * BFA_KEEP_UNDO  do not free undo information
@@ -678,8 +722,14 @@ buf_freeall(buf_T *buf, int flags)
 #ifdef FEAT_AUTOCMD
     int		is_curbuf = (buf == curbuf);
     bufref_T	bufref;
+# ifdef FEAT_WINDOWS
+    int		is_curwin = (curwin != NULL && curwin->w_buffer == buf);
+    win_T	*the_curwin = curwin;
+    tabpage_T	*the_curtab = curtab;
+# endif
 
-    buf->b_closing = TRUE;
+    /* Make sure the buffer isn't closed by autocommands. */
+    ++buf->b_locked;
     set_bufref(&bufref, buf);
     if (buf->b_ml.ml_mfp != NULL)
     {
@@ -705,7 +755,20 @@ buf_freeall(buf_T *buf, int flags)
 	    /* autocommands deleted the buffer */
 	    return;
     }
-    buf->b_closing = FALSE;
+    --buf->b_locked;
+
+# ifdef FEAT_WINDOWS
+    /* If the buffer was in curwin and the window has changed, go back to that
+     * window, if it still exists.  This avoids that ":edit x" triggering a
+     * "tabnext" BufUnload autocmd leaves a window behind without a buffer. */
+    if (is_curwin && curwin != the_curwin &&  win_valid_any_tab(the_curwin))
+    {
+	block_autocmds();
+	goto_tabpage_win(the_curtab, the_curwin);
+	unblock_autocmds();
+    }
+# endif
+
 # ifdef FEAT_EVAL
     if (aborting())	    /* autocmds may abort script processing */
 	return;
@@ -725,7 +788,7 @@ buf_freeall(buf_T *buf, int flags)
 #endif
 #ifdef FEAT_SYN_HL
     /* Remove any ownsyntax, unless exiting. */
-    if (firstwin != NULL && curwin->w_buffer == buf)
+    if (curwin != NULL && curwin->w_buffer == buf)
 	reset_synblock(curwin);
 #endif
 
@@ -741,7 +804,7 @@ buf_freeall(buf_T *buf, int flags)
 		clearFolding(win);
     }
 # else
-    if (curwin->w_buffer == buf)
+    if (curwin != NULL && curwin->w_buffer == buf)
 	clearFolding(curwin);
 # endif
 #endif
@@ -1332,6 +1395,10 @@ do_buffer(
 	    }
 	}
 
+	/* When closing the current buffer stop Visual mode. */
+	if (buf == curbuf && VIsual_active)
+	    end_visual_mode();
+
 	/*
 	 * If deleting the last (listed) buffer, make it empty.
 	 * The last (listed) buffer cannot be unloaded.
@@ -1350,9 +1417,9 @@ do_buffer(
 	 */
 	while (buf == curbuf
 # ifdef FEAT_AUTOCMD
-		   && !(curwin->w_closing || curwin->w_buffer->b_closing)
+		   && !(curwin->w_closing || curwin->w_buffer->b_locked > 0)
 # endif
-		   && (firstwin != lastwin || first_tabpage->tp_next != NULL))
+		   && (!ONE_WINDOW || first_tabpage->tp_next != NULL))
 	{
 	    if (win_close(curwin, FALSE) == FAIL)
 		break;
@@ -1589,10 +1656,11 @@ set_curbuf(buf_T *buf, int action)
 #ifdef FEAT_AUTOCMD
     if (!apply_autocmds(EVENT_BUFLEAVE, NULL, NULL, FALSE, curbuf)
 # ifdef FEAT_EVAL
-	    || (bufref_valid(&bufref) && !aborting()))
+	    || (bufref_valid(&bufref) && !aborting())
 # else
-	    || bufref_valid(&bufref))
+	    || bufref_valid(&bufref)
 # endif
+       )
 #endif
     {
 #ifdef FEAT_SYN_HL
@@ -2089,6 +2157,7 @@ free_buf_options(
 #if defined(FEAT_CRYPT)
     clear_string_option(&buf->b_p_cm);
 #endif
+    clear_string_option(&buf->b_p_fp);
 #if defined(FEAT_EVAL)
     clear_string_option(&buf->b_p_fex);
 #endif
@@ -2932,12 +3001,14 @@ buflist_list(exarg_T *eap)
 		|| (vim_strchr(eap->arg, '#')
 		      && (buf == curbuf || curwin->w_alt_fnum != buf->b_fnum)))
 	    continue;
-	msg_putchar('\n');
 	if (buf_spname(buf) != NULL)
 	    vim_strncpy(NameBuff, buf_spname(buf), MAXPATHL - 1);
 	else
 	    home_replace(buf, buf->b_fname, NameBuff, MAXPATHL, TRUE);
+	if (message_filtered(NameBuff))
+	    continue;
 
+	msg_putchar('\n');
 	len = vim_snprintf((char *)IObuff, IOSIZE - 20, "%3d%c%c%c%c%c \"%s\"",
 		buf->b_fnum,
 		buf->b_p_bl ? ' ' : 'u',
@@ -4801,8 +4872,8 @@ do_arg_all(
 	    wpnext = wp->w_next;
 	    buf = wp->w_buffer;
 	    if (buf->b_ffname == NULL
-		    || (!keep_tabs && buf->b_nwindows > 1)
-		    || wp->w_width != Columns)
+		    || (!keep_tabs && (buf->b_nwindows > 1
+			    || wp->w_width != Columns)))
 		i = opened_len;
 	    else
 	    {
@@ -4878,7 +4949,7 @@ do_arg_all(
 		    }
 #ifdef FEAT_WINDOWS
 		    /* don't close last window */
-		    if (firstwin == lastwin
+		    if (ONE_WINDOW
 			    && (first_tabpage->tp_next == NULL || !had_tab))
 #endif
 			use_firstwin = TRUE;
@@ -5083,9 +5154,9 @@ ex_buffer_all(exarg_T *eap)
 			: wp->w_width != Columns)
 		    || (had_tab > 0 && wp != firstwin)
 #endif
-		    ) && firstwin != lastwin
+		    ) && !ONE_WINDOW
 #ifdef FEAT_AUTOCMD
-		    && !(wp->w_closing || wp->w_buffer->b_closing)
+		    && !(wp->w_closing || wp->w_buffer->b_locked > 0)
 #endif
 		    )
 	    {

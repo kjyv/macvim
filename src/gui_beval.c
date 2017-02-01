@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *			Visual Workshop integration by Gordon Prieur
@@ -218,7 +218,7 @@ gui_mch_create_beval_area(
 
     if (mesg != NULL && mesgCB != NULL)
     {
-	EMSG(_("E232: Cannot create BalloonEval with both message and callback"));
+	IEMSG(_("E232: Cannot create BalloonEval with both message and callback"));
 	return NULL;
     }
 
@@ -508,7 +508,7 @@ removeEventHandler(BalloonEval *beval)
     /* LINTED: avoid warning: dubious operation on enum */
 # if GTK_CHECK_VERSION(3,0,0)
     g_signal_handlers_disconnect_by_func(G_OBJECT(beval->target),
-					 G_CALLBACK(target_event_cb),
+					 FUNC2GENERIC(target_event_cb),
 					 beval);
 # else
     gtk_signal_disconnect_by_func((GtkObject*)(beval->target),
@@ -522,7 +522,7 @@ removeEventHandler(BalloonEval *beval)
 	/* LINTED: avoid warning: dubious operation on enum */
 # if GTK_CHECK_VERSION(3,0,0)
 	g_signal_handlers_disconnect_by_func(G_OBJECT(gui.mainwin),
-					     G_CALLBACK(mainwin_event_cb),
+					     FUNC2GENERIC(mainwin_event_cb),
 					     beval);
 # else
 	gtk_signal_disconnect_by_func((GtkObject*)(gui.mainwin),
@@ -1178,12 +1178,23 @@ drawBalloon(BalloonEval *beval)
 	int		y_offset = EVAL_OFFSET_Y;
 	PangoLayout	*layout;
 # ifdef HAVE_GTK_MULTIHEAD
+#  if GTK_CHECK_VERSION(3,22,2)
+	GdkRectangle rect;
+	GdkMonitor * const mon = gdk_display_get_monitor_at_window(
+		gtk_widget_get_display(beval->balloonShell),
+		gtk_widget_get_window(beval->balloonShell));
+	gdk_monitor_get_geometry(mon, &rect);
+
+	screen_w = rect.width;
+	screen_h = rect.height;
+#  else
 	GdkScreen	*screen;
 
 	screen = gtk_widget_get_screen(beval->target);
 	gtk_window_set_screen(GTK_WINDOW(beval->balloonShell), screen);
 	screen_w = gdk_screen_get_width(screen);
 	screen_h = gdk_screen_get_height(screen);
+#  endif
 # else
 	screen_w = gdk_screen_width();
 	screen_h = gdk_screen_height();

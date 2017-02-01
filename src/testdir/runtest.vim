@@ -89,24 +89,44 @@ endfunc
 function RunTheTest(test)
   echo 'Executing ' . a:test
   if exists("*SetUp")
-    call SetUp()
+    try
+      call SetUp()
+    catch
+      call add(v:errors, 'Caught exception in SetUp() before ' . a:test . ': ' . v:exception . ' @ ' . v:throwpoint)
+    endtry
   endif
 
   call add(s:messages, 'Executing ' . a:test)
   let s:done += 1
   try
     exe 'call ' . a:test
+  catch /^\cskipped/
+    call add(s:messages, '    Skipped')
+    call add(s:skipped, 'SKIPPED ' . a:test . ': ' . substitute(v:exception, '^\S*\s\+', '',  ''))
   catch
     call add(v:errors, 'Caught exception in ' . a:test . ': ' . v:exception . ' @ ' . v:throwpoint)
   endtry
 
   if exists("*TearDown")
-    call TearDown()
+    try
+      call TearDown()
+    catch
+      call add(v:errors, 'Caught exception in TearDown() after ' . a:test . ': ' . v:exception . ' @ ' . v:throwpoint)
+    endtry
   endif
 
   " Close any extra windows and make the current one not modified.
-  while winnr('$') > 1
+  while 1
+    let wincount = winnr('$')
+    if wincount == 1
+      break
+    endif
     bwipe!
+    if wincount == winnr('$')
+      " Did not manage to close a window.
+      only!
+      break
+    endif
   endwhile
   set nomodified
 endfunc
@@ -118,6 +138,7 @@ let s:done = 0
 let s:fail = 0
 let s:errors = []
 let s:messages = []
+let s:skipped = []
 if expand('%') =~ 'test_viml.vim'
   " this test has intentional s:errors, don't use try/catch.
   source %
@@ -131,7 +152,14 @@ else
 endif
 
 " Names of flaky tests.
-let s:flaky = ['Test_reltime()', 'Test_nb_basic()', 'Test_communicate()']
+let s:flaky = [
+      \ 'Test_reltime()',
+      \ 'Test_nb_basic()',
+      \ 'Test_communicate()',
+      \ 'Test_close_and_exit_cb()',
+      \ 'Test_pipe_through_sort_all()',
+      \ 'Test_pipe_through_sort_some()'
+      \ ]
 
 " Locate Test_ functions and execute them.
 set nomore
@@ -191,7 +219,10 @@ if s:fail > 0
   call extend(s:messages, s:errors)
 endif
 
-" Append messages to "messages"
+" Add SKIPPED messages
+call extend(s:messages, s:skipped)
+
+" Append messages to the file "messages"
 split messages
 call append(line('$'), '')
 call append(line('$'), 'From ' . g:testname . ':')
@@ -199,3 +230,5 @@ call append(line('$'), s:messages)
 write
 
 qall!
+
+" vim: shiftwidth=2 sts=2 expandtab

@@ -113,6 +113,62 @@ enum {
                                        name:NSViewFrameDidChangeNotification
                                      object:textView];
 
+    /*
+    // Create the tab view (which is never visible, but the tab bar control
+    // needs it to function).
+    tabView = [[NSTabView alloc] initWithFrame:NSZeroRect];
+
+    // Create the tab bar control (which is responsible for actually
+    // drawing the tabline and tabs).
+    NSRect tabFrame = { { 0, frame.size.height - kPSMTabBarControlHeight },
+                        { frame.size.width, kPSMTabBarControlHeight } };
+    tabBarControl = [[PSMTabBarControl alloc] initWithFrame:tabFrame];
+
+    [tabView setDelegate:tabBarControl];
+
+    [tabBarControl setTabView:tabView];
+    [tabBarControl setDelegate:self];
+    [tabBarControl setHidden:YES];
+
+    if (shouldUseYosemiteTabBarStyle()) {
+        CGFloat screenWidth = [[NSScreen mainScreen] frame].size.width;
+        int tabMaxWidth = [ud integerForKey:MMTabMaxWidthKey];
+        if (tabMaxWidth == 0)
+            tabMaxWidth = screenWidth;
+        int tabOptimumWidth = [ud integerForKey:MMTabOptimumWidthKey];
+        if (tabOptimumWidth == 0)
+            tabOptimumWidth = screenWidth;
+
+        [tabBarControl setStyleNamed:@"Yosemite"];
+        [tabBarControl setCellMinWidth:[ud integerForKey:MMTabMinWidthKey]];
+        [tabBarControl setCellMaxWidth:tabMaxWidth];
+        [tabBarControl setCellOptimumWidth:tabOptimumWidth];
+    } else {
+        [tabBarControl setCellMinWidth:[ud integerForKey:MMTabMinWidthKey]];
+        [tabBarControl setCellMaxWidth:[ud integerForKey:MMTabMaxWidthKey]];
+        [tabBarControl setCellOptimumWidth:
+                                     [ud integerForKey:MMTabOptimumWidthKey]];
+    }
+
+    [tabBarControl setShowAddTabButton:[ud boolForKey:MMShowAddTabButtonKey]];
+    [[tabBarControl addTabButton] setTarget:self];
+    [[tabBarControl addTabButton] setAction:@selector(addNewTab:)];
+    [tabBarControl setAllowsDragBetweenWindows:NO];
+    [tabBarControl registerForDraggedTypes:
+                            [NSArray arrayWithObject:NSFilenamesPboardType]];
+
+    [tabBarControl setAutoresizingMask:NSViewWidthSizable|NSViewMinYMargin];
+    
+    //[tabBarControl setPartnerView:textView];
+    
+    // tab bar resizing only works if awakeFromNib is called (that's where
+    // the NSViewFrameDidChangeNotification callback is installed). Sounds like
+    // a PSMTabBarControl bug, let's live with it for now.
+    [tabBarControl awakeFromNib];
+
+    [self addSubview:tabBarControl];
+*/
+
     return self;
 }
 
@@ -145,11 +201,11 @@ enum {
     // weird behind the window resize throbber, so emulate the look of an
     // NSScrollView in the bottom right corner.
     if (![[self window] showsResizeIndicator]  // XXX: make this a flag
-            || !([[self window] styleMask] & NSTexturedBackgroundWindowMask))
+            || !([[self window] styleMask] & NSWindowStyleMaskTexturedBackground))
         return;
 
 #if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_7)
-    int sw = [NSScroller scrollerWidthForControlSize:NSRegularControlSize scrollerStyle:NSScrollerStyleLegacy];
+    int sw = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleLegacy];
 #else
     int sw = [NSScroller scrollerWidth];
 #endif
@@ -481,7 +537,7 @@ enum {
 
         NSRect rect;
 #if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_7)
-        CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSRegularControlSize scrollerStyle:NSScrollerStyleLegacy];
+        CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleLegacy];
 #else
         CGFloat scrollerWidth = [NSScroller scrollerWidth];
 #endif
@@ -627,7 +683,7 @@ enum {
 {
     NSSize size = textViewSize;
 #if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_7)
-    CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSRegularControlSize scrollerStyle:NSScrollerStyleLegacy];
+    CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleLegacy];
 #else
     CGFloat scrollerWidth = [NSScroller scrollerWidth];
 #endif
@@ -647,7 +703,7 @@ enum {
 {
     NSRect rect = { {0, 0}, {contentSize.width, contentSize.height} };
 #if (MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_7)
-    CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSRegularControlSize scrollerStyle:NSScrollerStyleLegacy];
+    CGFloat scrollerWidth = [NSScroller scrollerWidthForControlSize:NSControlSizeRegular scrollerStyle:NSScrollerStyleLegacy];
 #else
     CGFloat scrollerWidth = [NSScroller scrollerWidth];
 #endif

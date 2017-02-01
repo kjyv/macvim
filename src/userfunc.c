@@ -1,4 +1,4 @@
-/* vi:set ts=8 sts=4 sw=4:
+/* vi:set ts=8 sts=4 sw=4 noet:
  *
  * VIM - Vi IMproved	by Bram Moolenaar
  *
@@ -1955,7 +1955,7 @@ ex_function(exarg_T *eap)
 	    p += 7;
 	    if (current_funccal == NULL)
 	    {
-		emsg_funcname(N_("E932 Closure function should not be at top level: %s"),
+		emsg_funcname(N_("E932: Closure function should not be at top level: %s"),
 			name == NULL ? (char_u *)"" : name);
 		goto erret;
 	    }
@@ -2085,9 +2085,14 @@ ex_function(exarg_T *eap)
 		}
 	    }
 
-	    /* Check for ":append" or ":insert". */
+	    /* Check for ":append", ":change", ":insert". */
 	    p = skip_range(p, NULL);
 	    if ((p[0] == 'a' && (!ASCII_ISALPHA(p[1]) || p[1] == 'p'))
+		    || (p[0] == 'c'
+			&& (!ASCII_ISALPHA(p[1]) || (p[1] == 'h'
+				&& (!ASCII_ISALPHA(p[2]) || (p[2] == 'a'
+					&& (STRNCMP(&p[3], "nge", 3) != 0
+					    || !ASCII_ISALPHA(p[6])))))))
 		    || (p[0] == 'i'
 			&& (!ASCII_ISALPHA(p[1]) || (p[1] == 'n'
 				&& (!ASCII_ISALPHA(p[2]) || (p[2] == 's'))))))
@@ -2097,7 +2102,9 @@ ex_function(exarg_T *eap)
 	    arg = skipwhite(skiptowhite(p));
 	    if (arg[0] == '<' && arg[1] =='<'
 		    && ((p[0] == 'p' && p[1] == 'y'
-				    && (!ASCII_ISALPHA(p[2]) || p[2] == 't'))
+				    && (!ASCII_ISALNUM(p[2]) || p[2] == 't'
+					|| ((p[2] == '3' || p[2] == 'x')
+						   && !ASCII_ISALPHA(p[3]))))
 			|| (p[0] == 'p' && p[1] == 'e'
 				    && (!ASCII_ISALPHA(p[2]) || p[2] == 'r'))
 			|| (p[0] == 't' && p[1] == 'c'
@@ -2738,7 +2745,7 @@ ex_delfunction(exarg_T *eap)
 	    /* A normal function (not a numbered function or lambda) has a
 	     * refcount of 1 for the entry in the hashtable.  When deleting
 	     * it and the refcount is more than one, it should be kept.
-	     * A numbered function and lambda snould be kept if the refcount is
+	     * A numbered function and lambda should be kept if the refcount is
 	     * one or more. */
 	    if (fp->uf_refcount > (func_name_refcount(fp->uf_name) ? 0 : 1))
 	    {
@@ -2771,7 +2778,7 @@ func_unref(char_u *name)
 #ifdef EXITFREE
 	if (!entered_free_all_mem)
 #endif
-	    EMSG2(_(e_intern2), "func_unref()");
+	    internal_error("func_unref()");
     }
     if (fp != NULL && --fp->uf_refcount <= 0)
     {
@@ -2814,7 +2821,7 @@ func_ref(char_u *name)
     else if (isdigit(*name))
 	/* Only give an error for a numbered function.
 	 * Fail silently, when named or lambda function isn't found. */
-	EMSG2(_(e_intern2), "func_ref()");
+	internal_error("func_ref()");
 }
 
 /*
@@ -3479,7 +3486,7 @@ free_unref_funccal(int copyID, int testing)
 }
 
 /*
- * Get function call environment based on bactrace debug level
+ * Get function call environment based on backtrace debug level
  */
     static funccall_T *
 get_funccal(void)

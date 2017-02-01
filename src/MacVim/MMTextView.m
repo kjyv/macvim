@@ -317,6 +317,11 @@
     ligatures = state;
 }
 
+- (void)setThinStrokes:(BOOL)state
+{
+    thinStrokes = state;
+}
+
 - (void)setImControl:(BOOL)enable
 {
     [helper setImControl:enable];
@@ -513,6 +518,11 @@
 }
 
 - (void)setToolTipAtMousePoint:(NSString *)string
+{
+    // ONLY in Core Text!
+}
+
+- (void)setCGLayerEnabled:(BOOL)enabled
 {
     // ONLY in Core Text!
 }
